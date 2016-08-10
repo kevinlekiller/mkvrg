@@ -91,8 +91,8 @@ for file in $(find "$@" -type f -size "$MINSIZE" -iregex ".*\.mkv$"); do
     
     echo "INFO: Running bs1770gain, this can take a while. ($file)"
     RGINFO=$(bs1770gain --ebu $BSOPTS "$file" | tr "\r\n" " ")
-    TRACKGAIN=$(echo "$RGINFO" | grep -Poi "[\d.]+\s+LU\s+\[" | cut -d\  -f1)
-    ALBUMGAIN=$(echo "$RGINFO" | grep -Poi "[\d.]+\s+LU\s+done" | cut -d\  -f1)
+    TRACKGAIN=$(echo "$RGINFO" | grep -Poi "[-\d.]+\s+LU\s+\[" | cut -d\  -f1)
+    ALBUMGAIN=$(echo "$RGINFO" | grep -Poi "[-\d.]+\s+LU\s+done" | cut -d\  -f1)
     
     if [[ $TRACKGAIN == "" ]] || [[ $ALBUMGAIN == "" ]]; then
         echo -e "\e[92mNOTICE: Problem finding replaygain info from bs1770gain for file '$file'.\e[0m"

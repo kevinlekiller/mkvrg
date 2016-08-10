@@ -47,15 +47,13 @@ TMP="/tmp"
 # Extra options to pass to BS1770GAIN.
 # Note that --ebu is used in the script, if you want to use an alternate algorithm you
 # will need to edit parts of the script to work with whichever algorithm you choose.
-BSOPTS="--stereo"
+BSOPTS=""
 
 # Check if the file already has tags or if tags were written succesfully, requires mediainfo.
 VERIFY=true
 
 # Minimum mkv file size to work on. change to +0 to ignore.
-MINSIZE="+0M"
-
-
+MINSIZE="+50M"
 
 #########################################################################################
 #########################################################################################

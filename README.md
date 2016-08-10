@@ -12,7 +12,14 @@ bs1770gain, mkvpropedit, file, gnu grep, which, find, tr,
 Change settings inside the script.
 
 examples:  
-./mkvrg.sh                  ; Recursive search in current folder for mkv files.  
-./mkvrg.sh test.mkv         ; Process test.mkv in current folder.  
-./mkvrg.sh Videos/          ; Recursive search in Videos folder for mkv files.  
-./mkvrg.sh test.mkv Videos/ ; Process test.mkv in current folder and recursivesearch in Videos folder for mkv files.
+Recursive search in current folder for mkv files.  
+`./mkvrg.sh`
+
+Process test.mkv in current folder.  
+`./mkvrg.sh test.mkv`
+
+Recursive search in Videos folder for mkv files.  
+`./mkvrg.sh Videos/`
+
+Process test.mkv in current folder and recursive search in Videos folder for mkv files.  
+`./mkvrg.sh test.mkv Videos/`

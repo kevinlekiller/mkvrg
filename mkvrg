@@ -70,7 +70,7 @@ if [[ ! -d $TMP ]]; then
 fi
 
 if [[ $(which bs1770gain) == "" ]] || [[ $(which mkvpropedit) == "" ]]; then
-    echo -e "\e[31mERROR: These programs are required bs1770gain, mkvpropedit\e[0m"
+    echo -e "\e[31mERROR: These programs are required: bs1770gain, mkvpropedit\e[0m"
     exit 1
 fi
 

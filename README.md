@@ -9,8 +9,7 @@ Requires:
 bs1770gain, mkvpropedit, file, gnu grep, which, find, tr,  
 (optional) mediainfo
 
-Currently (August 11 2016) optionally requires https://github.com/kevinlekiller/bs1770gain_fixes to work properly on matroska files with multiple audio tracks until bs1770gain is released with those fixes,
-otherwise all the audio tracks will have the replaygain info from the last track.
+Requires at minimum bs1770gain 0.4.11 (otherwise if the matroska file has multiple audio tracks, it will scan the wrong track for replaygain information, 0.4.11 fixes this issue).
 
 Change settings inside the script.
 

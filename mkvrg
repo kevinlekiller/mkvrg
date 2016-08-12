@@ -20,40 +20,44 @@
 LICENSE
 
 <<DESCRIPTION
-    Script for analyzing mkv files with BS1770GAIN and applying replaygain
-    information with mkvpropedit. Pass list of files or a directory
-    to scan files, if you pass a directory it will recursively search in it for files.
+    Bash script for analyzing audio tracks in matroska files with BS1770GAIN and
+    applying replaygain (EBU r128) track and sample peak information
+    with mkvpropedit, this avoids remuxing the matroksa file.
+    Pass list of files or a directory to scan files, if you pass a
+    directory it will recursively search in it for files.
+    It will only work on files with these extensions: "mkv, mka, mk3d".
     
     Requires: bs1770gain, mkvpropedit, file, gnu grep, which, find, tr,
               (optional) mediainfo
     
+    Currently (August 11 2016) optionally requires
+    https://github.com/kevinlekiller/bs1770gain_fixes to work properly on matroska
+    files with multiple audio tracks until bs1770gain is released with those fixes,
+    otherwise all the audio tracks will have the replaygain info from the last audio track.
+    
     Change settings below.
     
     examples:
-    ./mkvrg.sh                  ; Recursive search in current folder for mkv files.
-    ./mkvrg.sh test.mkv         ; Process test.mkv in current folder.
-    ./mkvrg.sh Videos/          ; Recursive search in Videos folder for mkv files.
-    ./mkvrg.sh test.mkv Videos/ ; Process test.mkv in current folder and recursive
-                                  search in Videos folder for mkv files.
+    ./mkvrg                  ; Recursive search in current folder for matroska files.
+    ./mkvrg test.mkv         ; Process test.mkv in current folder.
+    ./mkvrg Videos/          ; Recursive search in Videos folder for matroska files.
+    ./mkvrg test.mkv Videos/ ; Process test.mkv in current folder and recursive
+                                  search in Videos folder for matroska files.
 DESCRIPTION
 
 #########################################################################################
 ##################################### Settings ##########################################
 #########################################################################################
 
-# Temp path to work on the xml file for mkvpropedit.
-TMP="/tmp"
-
-# Extra options to pass to BS1770GAIN.
-# Note that --ebu is used in the script, if you want to use an alternate algorithm you
-# will need to edit parts of the script to work with whichever algorithm you choose.
-BSOPTS=""
-
 # Check if the file already has tags or if tags were written succesfully, requires mediainfo.
-VERIFY=true
+VERIFY=false
 
-# Minimum mkv file size to work on. change to +0 to ignore.
-MINSIZE="+50M"
+# Force mkvrg to process matroska files, even if they already have replaygain tags. (ignored if VERIFY is false)
+FORCE=false
+
+# Minimum matroska file size to work on. change to +0 to ignore.
+# For example, set to +50M to ignore files under 50MB.
+MINSIZE="+0"
 
 #########################################################################################
 #########################################################################################
@@ -64,19 +68,20 @@ if [[ $VERIFY == true ]] && [[ ! $(which mediainfo) ]]; then
     exit 1
 fi
 
-if [[ ! -d $TMP ]]; then
-    echo -e "\e[31mERROR: Temp path does not exist: $TMP\e[0m"
-    exit 1
-fi
-
 if [[ $(which bs1770gain) == "" ]] || [[ $(which mkvpropedit) == "" ]]; then
-    echo -e "\e[31mERROR: These programs are required: bs1770gain, mkvpropedit\e[0m"
+    echo -e "\e[31mERROR: These programs are required bs1770gain, mkvpropedit\e[0m"
     exit 1
 fi
 
-TMPFILE="$TMP/mkvrg.xml"
+TMPFILE="$(mktemp)"
 
-for file in $(find "$@" -type f -size "$MINSIZE" -iregex ".*\.mkv$"); do
+if [[ ! -f $TMPFILE ]] || [[ ! -w $TMPFILE ]]; then
+    echo "\e[31mERROR: Could not create temp file $TMPFILE. Check permissions.\e[0m"
+    exit 1
+fi
+
+i=0
+for file in $(find "$@" -type f -size "$MINSIZE" -iregex ".*\.\(mk[av]\|mk3d\)$"); do
     if [[ ! -f $file ]]; then
         continue
     elif [[ ! $(file $file) =~ "Matroska" ]]; then
@@ -84,22 +89,32 @@ for file in $(find "$@" -type f -size "$MINSIZE" -iregex ".*\.mkv$"); do
         continue
     fi
     
-    if [[ $VERIFY == true ]] && [[ $(mediainfo $file) =~ "ITU-R BS.1770" ]]; then
+    if [[ ! $FORCE == true ]] && [[ $VERIFY == true ]] && [[ $(mediainfo $file) =~ "ITU-R BS.1770" ]]; then
         echo -e "\e[92mNOTICE: Skipping, replaygain tags already exist on file '$file'\e[0m"
         continue
     fi
     
-    echo "INFO: Running bs1770gain, this can take a while. ($file)"
-    RGINFO=$(bs1770gain --ebu $BSOPTS "$file" | tr "\r\n" " ")
-    TRACKGAIN=$(echo "$RGINFO" | grep -Poi "[-\d.]+\s+LU\s+\[" | cut -d\  -f1)
-    ALBUMGAIN=$(echo "$RGINFO" | grep -Poi "[-\d.]+\s+LU\s+done" | cut -d\  -f1)
-    
-    if [[ $TRACKGAIN == "" ]] || [[ $ALBUMGAIN == "" ]]; then
-        echo -e "\e[92mNOTICE: Problem finding replaygain info from bs1770gain for file '$file'.\e[0m"
+    tracks=$(bs1770gain -l "$file" 2>&1 | grep -Poi "Stream\s*#\d+:\d+.+?Audio" | grep -Po "\d+:\d+" | cut -d : -f 2)
+
+    if [[ $tracks == "" ]]; then
+        echo -e "\e[93mWARNING: Could not get track list for '$file'.\e[0m"
         continue
     fi
     
-    echo "<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>
+    trackindex=0
+    for track in $tracks; do
+        ((trackindex++))
+
+        echo "INFO: Running bs1770gain, this can take a while. (track $track on file '$file')"
+        RGINFO=$(bs1770gain --audio "$track" --ebu -ip "$file" | tr "\r\n" " " | grep -Poi "[-\d.]+\s+LU.+?\[ALBUM")
+        TRACKGAIN=$(echo "$RGINFO" | grep -Poi "[-\d.]+\s+LU\s+sample" | cut -d\  -f1)
+        TRACKPEAK=$(echo "$RGINFO" | grep -Poi "[-\d.]+\s+\[ALBUM" | cut -d\  -f1)
+        if [[ $TRACKGAIN == "" ]] || [[ $TRACKPEAK == "" ]]; then
+            echo -e "\e[92mNOTICE: Problem finding replaygain info from bs1770gain for track $track on file '$file'.\e[0m"
+            continue
+        fi
+        
+        echo "<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>
 
 <!DOCTYPE Tags SYSTEM \"matroskatags.dtd\">
 <Tags>
@@ -107,12 +122,12 @@ for file in $(find "$@" -type f -size "$MINSIZE" -iregex ".*\.mkv$"); do
     <Targets>
     </Targets>
     <Simple>
-      <Name>REPLAYGAIN_ALBUM_GAIN</Name>
-      <String>$ALBUMGAIN</String>
-    </Simple>
-    <Simple>
       <Name>REPLAYGAIN_TRACK_GAIN</Name>
       <String>$TRACKGAIN</String>
+    </Simple>
+    <Simple>
+      <Name>REPLAYGAIN_TRACK_PEAK</Name>
+      <String>$TRACKPEAK</String>
     </Simple>
     <Simple>
       <Name>REPLAYGAIN_ALGORITHM</Name>
@@ -124,19 +139,20 @@ for file in $(find "$@" -type f -size "$MINSIZE" -iregex ".*\.mkv$"); do
     </Simple>
   </Tag>
 </Tags>" > "$TMPFILE"
-
-    if [[ ! -f $TMPFILE ]]; then
-        echo -e "\e[31mERROR: Problem writing file to temp directory ($TMPFILE). Check directory permissions.\e[0m"
-        exit 1
-    fi
-
-    echo "INFO: Applying track gain ($TRACKGAIN) / album gain ($ALBUMGAIN) for file '$file'."
-    
-    mkvpropedit -t global:"$TMPFILE" "$file"
-    
-    rm "$TMPFILE"
-    
-    if [[ $VERIFY == true ]] && [[ ! $(mediainfo $file) =~ "ITU-R BS.1770" ]]; then
-        echo -e "\e[93mWARNING: Replaygain has not been applied on file '$file'.\e[0m"
-    fi
+        
+        echo "INFO: Applying track gain ($TRACKGAIN) / track peak ($TRACKPEAK) for track $track on file '$file'."
+        
+        mkvpropedit --tags track:a"$trackindex":"$TMPFILE" "$file"
+        
+        if [[ $VERIFY == true ]] && [[ ! $(mediainfo $file) =~ "ITU-R BS.1770" ]]; then
+            echo -e "\e[93mWARNING: Replaygain has not been applied for track $track on file '$file'.\e[0m"
+            continue
+        fi
+    done
+    ((i++))
 done
+
+rm "$TMPFILE"
+if [[ $i == 0 ]]; then
+    exit 1
+fi

@@ -101,6 +101,7 @@ for file in $(find "$@" -type f -size "$MINSIZE" -iregex ".*\.\(mk[av]\|mk3d\)$"
     fi
     
     trackindex=0
+    fileprocessed=0
     for track in $tracks; do
         ((trackindex++))
 
@@ -147,11 +148,16 @@ for file in $(find "$@" -type f -size "$MINSIZE" -iregex ".*\.\(mk[av]\|mk3d\)$"
             echo -e "\e[93mWARNING: Replaygain has not been applied for track $track on file '$file'.\e[0m"
             continue
         fi
+        ((fileprocessed++))
     done
-    ((i++))
+    if [[ $fileprocessed -gt 0 ]]; then
+        ((i++))
+    fi
 done
 
 rm "$TMPFILE"
+# If you process a single file, you can use the exit status to know if the file was processed or not,
+# which is useful if you're using this script inside another script.
 if [[ $i == 0 ]]; then
     exit 1
 fi

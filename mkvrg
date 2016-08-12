@@ -105,8 +105,7 @@ for file in $(find "$@" -type f -size "$MINSIZE" -iregex ".*\.\(mk[av]\|mk3d\)$"
         ((trackindex++))
 
         echo "INFO: Running bs1770gain, this can take a while. (track $track on file '$file')"
-        RGINFO=$(bs1770gain --audio "$track" --ebu -ip "$file" | tee /dev/stderr)
-        RGINFO=$(echo "$RGINFO" | tr "\r\n" " " | grep -Poi "[-\d.]+\s+LU.+?\[ALBUM")
+        RGINFO=$(bs1770gain --audio "$track" --ebu -ip "$file" | tee /dev/stderr | tr "\r\n" " " | grep -Poi "[-\d.]+\s+LU.+?\[ALBUM")
         TRACKGAIN=$(echo "$RGINFO" | grep -Poi "[-\d.]+\s+LU\s+sample" | cut -d\  -f1)
         TRACKPEAK=$(echo "$RGINFO" | grep -Poi "[-\d.]+\s+\[ALBUM" | cut -d\  -f1)
         if [[ $TRACKGAIN == "" ]] || [[ $TRACKPEAK == "" ]]; then

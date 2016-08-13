@@ -50,14 +50,14 @@ DESCRIPTION
 #########################################################################################
 
 # Check if the file already has tags or if tags were written succesfully, requires mediainfo.
-VERIFY=false
+VERIFY=${VERIFY:-false}
 
 # Force mkvrg to process matroska files, even if they already have replaygain tags. (ignored if VERIFY is false)
-FORCE=false
+FORCE=${FORCE:-false}
 
 # Minimum matroska file size to work on. change to +0 to ignore.
 # For example, set to +50M to ignore files under 50MB.
-MINSIZE="+0"
+MINSIZE=${MINSIZE:-"+0"}
 
 #########################################################################################
 #########################################################################################

@@ -172,7 +172,7 @@ while read file; do
     if [[ $fileprocessed -gt 0 ]]; then
         ((i++))
     fi
-done < <(find "$@" -type f -size "$MINSIZE" -iregex ".*\.\(mk[av]\|mk3d\)$")
+done < <(find "$@" -type f -size "$MINSIZE" \( -iname "*.mk[av]" -o -iname "*.mk3d" \))
 
 # If you process a single file, you can use the exit status to know if the file was processed or not,
 # which is useful if you're using this script inside another script.

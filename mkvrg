@@ -79,6 +79,16 @@ if [[ ! -f $TMPFILE ]] || [[ ! -w $TMPFILE ]]; then
     exit 1
 fi
 
+trap cleantmp SIGHUP SIGINT SIGQUIT SIGFPE SIGKILL SIGTERM
+
+function cleantmp() {
+    rm -f $TMPFILE
+    if [[ ! -z $1 ]]; then
+        exit $1
+    fi
+    exit 1
+}
+
 i=0
 find "$@" -type f -size "$MINSIZE" -iregex ".*\.\(mk[av]\|mk3d\)$" -print0 | while IFS= read -r -d '' file; do
     if [[ ! -f "$file" ]]; then
@@ -155,9 +165,9 @@ find "$@" -type f -size "$MINSIZE" -iregex ".*\.\(mk[av]\|mk3d\)$" -print0 | whi
     fi
 done
 
-rm "$TMPFILE"
 # If you process a single file, you can use the exit status to know if the file was processed or not,
 # which is useful if you're using this script inside another script.
 if [[ $i == 0 ]]; then
-    exit 1
+    cleantmp 1
 fi
+cleantmp 0

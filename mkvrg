@@ -80,15 +80,15 @@ if [[ ! -f $TMPFILE ]] || [[ ! -w $TMPFILE ]]; then
 fi
 
 i=0
-for file in $(find "$@" -type f -size "$MINSIZE" -iregex ".*\.\(mk[av]\|mk3d\)$"); do
-    if [[ ! -f $file ]]; then
+find "$@" -type f -size "$MINSIZE" -iregex ".*\.\(mk[av]\|mk3d\)$" -print0 | while IFS= read -r -d '' file; do
+    if [[ ! -f "$file" ]]; then
         continue
-    elif [[ ! $(file $file) =~ "Matroska" ]]; then
+    elif [[ ! $(file "$file") =~ "Matroska" ]]; then
         echo -e "\e[92mNOTICE: '$file' is not a mkv file.\e[0m"
         continue
     fi
     
-    if [[ ! $FORCE == true ]] && [[ $VERIFY == true ]] && [[ $(mediainfo $file) =~ "ITU-R BS.1770" ]]; then
+    if [[ ! $FORCE == true ]] && [[ $VERIFY == true ]] && [[ $(mediainfo "$file") =~ "ITU-R BS.1770" ]]; then
         echo -e "\e[92mNOTICE: Skipping, replaygain tags already exist on file '$file'\e[0m"
         continue
     fi
@@ -144,7 +144,7 @@ for file in $(find "$@" -type f -size "$MINSIZE" -iregex ".*\.\(mk[av]\|mk3d\)$"
         
         mkvpropedit --tags track:a"$trackindex":"$TMPFILE" "$file"
         
-        if [[ $VERIFY == true ]] && [[ ! $(mediainfo $file) =~ "ITU-R BS.1770" ]]; then
+        if [[ $VERIFY == true ]] && [[ ! $(mediainfo "$file") =~ "ITU-R BS.1770" ]]; then
             echo -e "\e[93mWARNING: Replaygain has not been applied for track $track on file '$file'.\e[0m"
             continue
         fi

@@ -74,7 +74,7 @@ fi
 
 REFLOUDNESS=$(bs1770gain --help 2>&1 | grep -Poi "[-\d.]+\s*LUFS,?\s*default" | cut -d\  -f1)
 if [[ $REFLOUDNESS == "" ]]; then
-    echo -e "\e[31mERROR: Could not find default replaygain reference loudness from bs1770gain."
+    echo -e "\e[31mERROR: Could not find default replaygain reference loudness from bs1770gain.\e[0m"
     exit 1
 fi
 
@@ -122,7 +122,7 @@ find "$@" -type f -size "$MINSIZE" -iregex ".*\.\(mk[av]\|mk3d\)$" -print0 | whi
         ((trackindex++))
 
         echo "INFO: Running bs1770gain, this can take a while. (track $track on file '$file')"
-        RGINFO=$(bs1770gain --audio "$track" -rt "$file" | tee /dev/stderr | tr "\r\n" " " | grep -o "analyzing.*ALBUM")
+        RGINFO=$(bs1770gain --audio "$track" -rt "$file" | tee /dev/stderr | tr "\r\n" " " | grep -io "analyzing.*ALBUM")
         TRACKGAIN=$(echo "$RGINFO" | grep -Poi "[-\d.]+\s+LU\s+range" | cut -d\  -f1)
         TRACKRANGE=$(echo "$RGINFO" | grep -Poi "[-\d.]+\s+LUFS\s+true" | cut -d\  -f1)
         TRACKPEAK=$(echo "$RGINFO" | grep -Poi "[-\d.]+\s+\[ALBUM" | cut -d\  -f1)

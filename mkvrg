@@ -132,7 +132,6 @@ while read file; do
             continue
         fi
         
-        # Copy Track info to album info, so mpv can parse the tags.
         echo "<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>
 
 <!DOCTYPE Tags SYSTEM \"matroskatags.dtd\">
@@ -158,18 +157,6 @@ while read file; do
     </Simple>
     <Simple>
       <Name>REPLAYGAIN_TRACK_PEAK</Name>
-      <String>$TRACKPEAK</String>
-    </Simple>
-    <Simple>
-    <Name>REPLAYGAIN_ALBUM_GAIN</Name>
-      <String>$TRACKGAIN</String>
-    </Simple>
-    <Simple>
-      <Name>REPLAYGAIN_ALBUM_RANGE</Name>
-      <String>$TRACKRANGE</String>
-    </Simple>
-    <Simple>
-      <Name>REPLAYGAIN_ALBUM_PEAK</Name>
       <String>$TRACKPEAK</String>
     </Simple>
   </Tag>

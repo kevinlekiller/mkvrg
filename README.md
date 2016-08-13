@@ -11,7 +11,7 @@ bs1770gain, mkvpropedit, file, gnu grep, which, find, tr,
 
 Requires at minimum bs1770gain 0.4.11 (otherwise if the matroska file has multiple audio tracks, it will scan the wrong track for replaygain information, 0.4.11 fixes this issue).
 
-Change settings inside the script.
+Change settings inside the script. You can also set environment variables to change settings on a per call basis.
 
 examples:  
 Recursive search in current folder for matroska files.  
@@ -25,3 +25,7 @@ Recursive search in Videos folder for matroska files.
 
 Process test.mkv in current folder and recursive search in Videos folder for matroska files.  
 `./mkvrg test.mkv Videos/`
+
+Process test.mkv but only if it has no tags yet and its size is at least 100 MB.
+
+`VERIFY=true FORCE=false MINSIZE=+100M ./mkvrg`

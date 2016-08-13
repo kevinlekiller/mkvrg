@@ -72,6 +72,12 @@ if [[ $(which bs1770gain) == "" ]] || [[ $(which mkvpropedit) == "" ]]; then
     exit 1
 fi
 
+REFLOUDNESS=$(bs1770gain --help 2>&1 | grep -Poi "[-\d.]+\s*LUFS,?\s*default" | cut -d\  -f1)
+if [[ $REFLOUDNESS == "" ]]; then
+    echo -e "\e[31mERROR: Could not find default replaygain reference loudness from bs1770gain."
+    exit 1
+fi
+
 TMPFILE="$(mktemp)"
 
 if [[ ! -f $TMPFILE ]] || [[ ! -w $TMPFILE ]]; then
@@ -116,14 +122,16 @@ find "$@" -type f -size "$MINSIZE" -iregex ".*\.\(mk[av]\|mk3d\)$" -print0 | whi
         ((trackindex++))
 
         echo "INFO: Running bs1770gain, this can take a while. (track $track on file '$file')"
-        RGINFO=$(bs1770gain --audio "$track" --ebu -ip "$file" | tee /dev/stderr | tr "\r\n" " " | grep -Poi "[-\d.]+\s+LU.+?\[ALBUM")
-        TRACKGAIN=$(echo "$RGINFO" | grep -Poi "[-\d.]+\s+LU\s+sample" | cut -d\  -f1)
+        RGINFO=$(bs1770gain --audio "$track" -rt "$file" | tee /dev/stderr | tr "\r\n" " " | grep -o "analyzing.*ALBUM")
+        TRACKGAIN=$(echo "$RGINFO" | grep -Poi "[-\d.]+\s+LU\s+range" | cut -d\  -f1)
+        TRACKRANGE=$(echo "$RGINFO" | grep -Poi "[-\d.]+\s+LUFS\s+true" | cut -d\  -f1)
         TRACKPEAK=$(echo "$RGINFO" | grep -Poi "[-\d.]+\s+\[ALBUM" | cut -d\  -f1)
         if [[ $TRACKGAIN == "" ]] || [[ $TRACKPEAK == "" ]]; then
             echo -e "\e[92mNOTICE: Problem finding replaygain info from bs1770gain for track $track on file '$file'.\e[0m"
             continue
         fi
         
+        # Copy Track info to album info, so mpv can parse the tags.
         echo "<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>
 
 <!DOCTYPE Tags SYSTEM \"matroskatags.dtd\">
@@ -132,25 +140,41 @@ find "$@" -type f -size "$MINSIZE" -iregex ".*\.\(mk[av]\|mk3d\)$" -print0 | whi
     <Targets>
     </Targets>
     <Simple>
+      <Name>REPLAYGAIN_ALGORITHM</Name>
+      <String>ITU-R BS.1770</String>
+    </Simple>
+    <Simple>
+      <Name>REPLAYGAIN_REFERENCE_LOUDNESS</Name>
+      <String>$REFLOUDNESS</String>
+    </Simple>
+    <Simple>
       <Name>REPLAYGAIN_TRACK_GAIN</Name>
       <String>$TRACKGAIN</String>
+    </Simple>
+    <Simple>
+      <Name>REPLAYGAIN_TRACK_RANGE</Name>
+      <String>$TRACKRANGE</String>
     </Simple>
     <Simple>
       <Name>REPLAYGAIN_TRACK_PEAK</Name>
       <String>$TRACKPEAK</String>
     </Simple>
     <Simple>
-      <Name>REPLAYGAIN_ALGORITHM</Name>
-      <String>ITU-R BS.1770</String>
+    <Name>REPLAYGAIN_ALBUM_GAIN</Name>
+      <String>$TRACKGAIN</String>
     </Simple>
     <Simple>
-      <Name>REPLAYGAIN_REFERENCE_LOUDNESS</Name>
-      <String>-23.00</String>
+      <Name>REPLAYGAIN_ALBUM_RANGE</Name>
+      <String>$TRACKRANGE</String>
+    </Simple>
+    <Simple>
+      <Name>REPLAYGAIN_ALBUM_PEAK</Name>
+      <String>$TRACKPEAK</String>
     </Simple>
   </Tag>
 </Tags>" > "$TMPFILE"
         
-        echo "INFO: Applying track gain ($TRACKGAIN) / track peak ($TRACKPEAK) for track $track on file '$file'."
+        echo "INFO: Applying gain ($TRACKGAIN) / true peak ($TRACKPEAK) / range ($TRACKRANGE) for track $track on file '$file'."
         
         mkvpropedit --tags track:a"$trackindex":"$TMPFILE" "$file"
         

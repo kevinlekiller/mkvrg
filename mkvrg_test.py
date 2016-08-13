@@ -39,8 +39,8 @@ class Mkvrg:
         if not self.test_matroska(path):
             return
 
-
-    def test_matroska(self, path):
+    @staticmethod
+    def test_matroska(path):
         with magic.Magic() as m:
             if "matroska" not in m.id_filename(path).lower():
                 print("File is not matroska.")

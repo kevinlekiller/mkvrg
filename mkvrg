@@ -97,9 +97,7 @@ function cleantmp() {
 }
 
 i=0
-OLDIFS="$IFS"
-IFS=$'\n'
-for file in $(find "$@" -type f -size "$MINSIZE" -iregex ".*\.\(mk[av]\|mk3d\)$"); do
+while read file; do
     if [[ ! -f "$file" ]]; then
         continue
     elif [[ ! $(file "$file") =~ "Matroska" ]]; then
@@ -113,7 +111,6 @@ for file in $(find "$@" -type f -size "$MINSIZE" -iregex ".*\.\(mk[av]\|mk3d\)$"
     fi
     
     tracks=$(bs1770gain -l "$file" 2>&1 | grep -Poi "Stream\s*#\d+:\d+.+?Audio" | grep -Po "\d+:\d+" | cut -d : -f 2)
-
     if [[ $tracks == "" ]]; then
         echo -e "\e[93mWARNING: Could not get track list for '$file'.\e[0m"
         continue
@@ -177,8 +174,7 @@ for file in $(find "$@" -type f -size "$MINSIZE" -iregex ".*\.\(mk[av]\|mk3d\)$"
     if [[ $fileprocessed -gt 0 ]]; then
         ((i++))
     fi
-done
-IFS="$OLDIFS"
+done < <(find "$@" -type f -size "$MINSIZE" -iregex ".*\.\(mk[av]\|mk3d\)$")
 
 # If you process a single file, you can use the exit status to know if the file was processed or not,
 # which is useful if you're using this script inside another script.

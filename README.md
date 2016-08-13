@@ -27,4 +27,5 @@ Process test.mkv in current folder and recursive search in Videos folder for mat
 `./mkvrg test.mkv Videos/`
 
 Process test.mkv but only if it has no tags yet and its size is at least 100 MB.
+
 `VERIFY=true FORCE=false MINSIZE=+100M ./mkvrg`

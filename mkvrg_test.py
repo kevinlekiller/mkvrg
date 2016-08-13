@@ -3,6 +3,7 @@
 import sys
 import os
 from glob import glob
+import fnmatch
 # Need to install magic for checking if file is matroska (sudo pip install filemagic)
 #import magic
 
@@ -24,10 +25,9 @@ def parse_args(args):
 
 
 def process_dir(directory):
-    for dirname in os.walk(directory):
-        for path in glob(os.path.join(dirname[0], '*.mk[av]')):
-            process_file(path)
-
+    for rootdir, dirnames, filenames in os.walk(directory):
+        for filename in fnmatch.filter(filenames, '*.mkv'):
+            process_file(os.path.join(rootdir, filename))
 
 def process_file(path):
     print(path)

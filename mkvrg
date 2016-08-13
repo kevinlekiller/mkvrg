@@ -98,9 +98,7 @@ function cleantmp() {
 
 i=0
 while read file; do
-    if [[ ! -f "$file" ]]; then
-        continue
-    elif [[ ! $(file "$file") =~ "Matroska" ]]; then
+    if [[ ! $(file "$file") =~ "Matroska" ]]; then
         echo -e "\e[92mNOTICE: '$file' is not a mkv file.\e[0m"
         continue
     fi

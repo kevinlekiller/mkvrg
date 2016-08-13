@@ -97,6 +97,7 @@ function cleantmp() {
 }
 
 i=0
+OLDIFS="$IFS"
 IFS=$'\n'
 for file in $(find "$@" -type f -size "$MINSIZE" -iregex ".*\.\(mk[av]\|mk3d\)$"); do
     if [[ ! -f "$file" ]]; then
@@ -177,7 +178,7 @@ for file in $(find "$@" -type f -size "$MINSIZE" -iregex ".*\.\(mk[av]\|mk3d\)$"
         ((i++))
     fi
 done
-unset IFS
+IFS="$OLDIFS"
 
 # If you process a single file, you can use the exit status to know if the file was processed or not,
 # which is useful if you're using this script inside another script.

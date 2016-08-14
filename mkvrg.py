@@ -32,7 +32,9 @@ class Mkvrg:
 
     def process_dir(self, directory):
         for rootdir, dirnames, filenames in os.walk(directory):
-            for filename in fnmatch.filter(filenames, '*.mkv'):
+            files = fnmatch.filter(filenames, '*.[mM][kK][aAvV]')
+            files.extend(fnmatch.filter(filenames, '*.[mM][kK]3[dD]'))
+            for filename in files:
                 self.process_file(os.path.join(rootdir, filename))
 
     def process_file(self, path):

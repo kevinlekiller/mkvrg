@@ -81,61 +81,102 @@ class Mkvrg:
         self.verify = False
 
         self.cur_path = ""
+        # For mkvpropedit
+        self.cur_tracknum = 0
+        # For bs1770gain
+        self.cur_trackid = 0
         self.mkv_info = []
+        self.track_count = 0
 
     def start(self, args):
         """Sort through paths to see if they are directories or normal files."""
         path = os.path
         for arg in args:
             if path.isdir(arg):
-                self.process_dir(arg),
+                self.__process_dir(arg),
             elif path.isfile(arg):
-                self.process_file(arg)
+                self.__process_file(arg)
             else:
                 self.print_message("This does not look like a valid path: " + arg, self.MNOTICE)
 
-    def process_dir(self, directory):
+    def __process_dir(self, directory):
         """Find mkv/mkva/mk3d files in directories"""
         for rootdir, dirnames, filenames in os.walk(directory):
             files = fnmatch.filter(filenames, '*.[mM][kK][aAvV]')
             files.extend(fnmatch.filter(filenames, '*.[mM][kK]3[dD]'))
             for filename in files:
-                self.process_file(os.path.join(rootdir, filename))
+                self.__process_file(os.path.join(rootdir, filename))
 
-    def process_file(self, path):
+    def __process_file(self, path):
         """Process a matroska file, analyzing it with bs1770gain and applying tags."""
         self.cur_path = path
+        self.cur_tracknum = 0
+        self.cur_trackid = 0
+        self.mkv_info = []
         self.print_message("Processing file: " + self.cur_path)
         if not self.test_matroska(self.cur_path):
             self.print_message("File is not matroska.", self.MWARNING)
-            self.do_exit()
+            self.__do_exit()
             return
-        if not self.get_mkvinfo():
+        if not self.__get_mkvinfo():
             return
 
-    def get_mkvinfo(self):
+    def __get_mkvinfo(self):
         """Get matroska information for current file."""
         with open(self.cur_path, "rb") as handle:
-            mkv = enzyme.MKV(handle)
-        tracks = len(mkv.audio_tracks)
-        if not tracks:
+            self.mkv_info = enzyme.MKV(handle)
+        self.track_count = len(self.mkv_info.audio_tracks)
+        if not self.track_count:
             self.print_message("Could not find number of audio tracks.", self.MWARNING)
-            self.do_exit()
+            self.__do_exit()
+            return False
+        self.print_message("The file has " + str(self.track_count) + " audio tracks.", self.MDEBUG)
+        self.__process_tracks()
+
+    def __process_tracks(self):
+        for track in range(0, self.track_count):
+            self.cur_tracknum += 1
+            self.cur_trackid = self.mkv_info.audio_tracks[track].number
+            self.print_message("Track: " + str(self.cur_trackid), self.MDEBUG)
+            if self.default_track == True:
+                if self.mkv_info.audio_tracks[track].default == True:
+                    self.__process_track()
+                    continue
+                else:
+                    self.print_message("Skipping track " + str(self.cur_trackid) + ", --default option is on.", self.MINFO)
+                    continue
+            self.__process_track()
+
+    def __process_track(self):
+        """Run the track through bs1770gain and mkvpropedit, check if tags were applied."""
+        if not self.__check_tags():
             return
-        self.print_message("The file has " + str(tracks) + " audio tracks.", self.MDEBUG)
-        for track in range(0, tracks):
-           self.print_message("Track: " + str(mkv.audio_tracks[track].number), self.MDEBUG)
 
+    def __analyze_track(self):
+        """Run bs1770gain on the file to get replaygain information."""
 
-    def check_tags(self, path, first_check=True):
+    def __check_tags(self, first_check=True):
         """Check if matroska file has replaygain tags."""
         if self.verify == False :
-            return
+            return True
         if first_check == True and self.force == True:
-            return
-        print()
+            self.print_message("Skipping replaygain tags check, --force is on.", self.MINFO)
+            return True
+        if not len(self.mkv_info.tags) and first_check == False:
+            self.print_message("No tags at all found in the file.", self.MERROR)
+            self.__do_exit()
+            return False
+        if "ITU-R BS.1770" in str(self.mkv_info.tags):
+            self.print_message("Replaying tags found in file.", self.MINFO)
+            return True
+        if first_check == True:
+            self.print_message("No replaygain tags found in file.", self.MINFO)
+            return True
+        self.print_message("No replaygain tags found in file.", self.MERROR)
+        self.__do_exit()
+        return False
 
-    def do_exit(self, code=1):
+    def __do_exit(self, code=1):
         """Exit if --exit option is enabled."""
         if self.exit:
             self.print_message("The --exit option is enabled, exiting.", self.MINFO)

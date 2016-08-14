@@ -134,7 +134,8 @@ class Mkvrg:
         elif mtype == self.MDEBUG:
             print("\033[95mDEBUG: " + message + "\033[0m")
 
-    def test_matroska(self,path):
+    @staticmethod
+    def test_matroska(path):
         """Test if file is Matroska data."""
         with magic.Magic() as m:
             if "matroska" in m.id_filename(path).lower():

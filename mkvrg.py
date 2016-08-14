@@ -7,12 +7,13 @@ import magic
 
 
 def main(argv):
-    if len(argv) == 1:
-        print("At least 1 argument is required, files or folders.")
-        return 1
-
     mkvrg = Mkvrg("mkvrg")
-    return mkvrg.start(argv[1:])
+    paths = argv[1:]
+    if not len(paths):
+        paths = ["."]
+        print "No arguments given, processing current working directory recursively."
+
+    return mkvrg.start(paths)
 
 
 class Mkvrg:

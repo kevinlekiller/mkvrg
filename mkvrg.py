@@ -1,5 +1,9 @@
 #!/usr/bin/env python
 
+
+# Issues: enzyme returns the "track number" like mkvinfo does, but bs1770gain requires the "track ID"
+# Might need to drop enzyme
+
 import sys
 import os
 import fnmatch
@@ -123,8 +127,13 @@ class Mkvrg:
 
     def __get_mkvinfo(self):
         """Get matroska information for current file."""
-        with open(self.cur_path, "rb") as handle:
-            self.mkv_info = enzyme.MKV(handle)
+        try:
+            with open(self.cur_path, "rb") as handle:
+                self.mkv_info = enzyme.MKV(handle)
+        except enzyme.exceptions.MalformedMKVError as e:
+            return False
+        except IOError as e:
+            return False
         self.track_count = len(self.mkv_info.audio_tracks)
         if not self.track_count:
             self.print_message("Could not find number of audio tracks.", self.MWARNING)
@@ -151,9 +160,22 @@ class Mkvrg:
         """Run the track through bs1770gain and mkvpropedit, check if tags were applied."""
         if not self.__check_tags():
             return
+        if not self.__analyze_track():
+            return
+        if not self.__apply_tags():
+            return
 
     def __analyze_track(self):
         """Run bs1770gain on the file to get replaygain information."""
+        self.run_command([
+            "bs1770gain",
+            "--audio", str(self.cur_trackid),
+            " -rt ",
+            self.cur_path
+        ])
+
+    def __apply_tags(self):
+        """Apply replaygain tags with mkvpropedit."""
 
     def __check_tags(self, first_check=True):
         """Check if matroska file has replaygain tags."""
@@ -198,6 +220,13 @@ class Mkvrg:
             print("\033[91mERROR: " + message + "\033[0m")
         elif mtype == self.MDEBUG:
             print("\033[95mDEBUG: " + message + "\033[0m")
+
+    def run_command(self, command):
+        try:
+            print(str(subprocess.check_output(command)))
+        except subprocess.CalledProcessError as e:
+            return False
+
 
     @staticmethod
     def test_matroska(path):

@@ -4,6 +4,7 @@ import sys
 import os
 import fnmatch
 import magic
+import enzyme
 from argparse import ArgumentParser
 
 
@@ -16,6 +17,7 @@ def main(argv):
 def parse_args(mkvrg):
     """Parse command line arguments."""
     parser = ArgumentParser()
+    parser.add_argument("-d", "--default", help="Only process the default audio track?", action="store_true")
     parser.add_argument("-m", "--minsize", type=int, help="Minimum size of matroska file in MB", default=0)
     parser.add_argument("-c", "--verify", help="Verify if matroska file has replaygain tags before and after analyzing.", action="store_true")
     parser.add_argument("-f", "--force", help="Force scanning files for replaygain, even if they already have replaygain tags.", action="store_true")
@@ -23,6 +25,7 @@ def parse_args(mkvrg):
     parser.add_argument("-v", "--verbosity", type=int, help="Level of verbosity. (0 = normal, -1 = silent, 1 = debug).", default=0, choices=[-1,0,1])
     parser.add_argument("paths", help="Path(s) to folder(s) or file(s) to scan matroska files for replaygain info.", nargs="*")
     args = parser.parse_args()
+    mkvrg.default_track = args.default
     mkvrg.exit = args.exit
     mkvrg.force = args.force
     mkvrg.minsize = args.minsize
@@ -47,11 +50,15 @@ class Mkvrg:
 
     def __init__(self, name):
         self.name = name
+        self.default_track = False
         self.exit = False
         self.force = False
         self.minsize = 0
         self.verbosity = self.VERBOSITY_NORMAL
         self.verify = False
+
+        self.cur_path = ""
+        self.mkv_info = []
 
     def start(self, args):
         """Sort through paths to see if they are directories or normal files."""
@@ -74,15 +81,34 @@ class Mkvrg:
 
     def process_file(self, path):
         """Process a matroska file, analyzing it with bs1770gain and applying tags."""
-        self.print_message("Processing file: " + path)
-        if not self.test_matroska(path):
+        self.cur_path = path
+        self.print_message("Processing file: " + self.cur_path)
+        if not self.test_matroska(self.cur_path):
             self.print_message("File is not matroska.", self.MWARNING)
-            if (self.exit):
-                exit(1)
+            self.do_exit()
+            return
+        if not self.get_mkvinfo():
             return
 
-    def check_tags(self, path):
+    def get_mkvinfo(self):
+        with open(self.cur_path, "rb") as handle:
+            mkv = enzyme.MKV(handle)
+        tracks = len(mkv.audio_tracks)
+        if not tracks:
+            self.print_message("Could not find number of audio tracks.", self.MWARNING)
+            self.do_exit()
+            return
+        self.print_message("The file has " + str(tracks) + " audio tracks.", self.MDEBUG)
+        for track in range(0, tracks):
+           self.print_message("Track: " + str(mkv.audio_tracks[track].number), self.MDEBUG)
+
+
+    def check_tags(self, path, first_check=True):
         """Check if matroska file has replaygain tags."""
+        if self.verify == False :
+            return
+        if first_check == True and self.force == True:
+            return
         print()
 
     def do_exit(self, code=1):
@@ -102,14 +128,13 @@ class Mkvrg:
         elif mtype == self.MNOTICE:
             print("\033[92mNOTICE: " + message + "\033[0m")
         elif mtype == self.MWARNING:
-            print("\033[93mWARNING: " + message + "\033\[0m]")
+            print("\033[93mWARNING: " + message + "\033\[0m")
         elif mtype == self.MERROR:
             print("\033[91mERROR: " + message + "\033[0m")
         elif mtype == self.MDEBUG:
             print("\033[95mDEBUG: " + message + "\033[0m")
 
-    @staticmethod
-    def test_matroska(path):
+    def test_matroska(self,path):
         """Test if file is Matroska data."""
         with magic.Magic() as m:
             if "matroska" in m.id_filename(path).lower():

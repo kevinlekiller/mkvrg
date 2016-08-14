@@ -11,7 +11,7 @@ def main(argv):
     paths = argv[1:]
     if not len(paths):
         paths = ["."]
-        print "No arguments given, processing current working directory recursively."
+        print("No arguments given, processing current working directory recursively.")
 
     return mkvrg.start(paths)
 

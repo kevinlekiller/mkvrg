@@ -5,11 +5,13 @@ import os
 import fnmatch
 import magic
 import enzyme
+import subprocess
 from argparse import ArgumentParser
 
 
 def main(argv):
     mkvrg = Mkvrg("mkvrg")
+    check_binaries(mkvrg)
     mkvrg.start(parse_args(mkvrg))
     return 0
 
@@ -36,6 +38,27 @@ def parse_args(mkvrg):
         return ["."]
     return args.paths
 
+
+def check_binaries(mkvrg):
+    """Check if all required binaries are in PATH."""
+    binaries = ["which", "bs1770gain", "mkvpropedit"]
+    for binary in binaries:
+        if not check_binary(binary):
+            mkvrg.print_message("The program '" + binary + "' is required.", mkvrg.MERROR)
+            exit(1)
+
+
+def check_binary(binary):
+    """Check if a binary is in PATH."""
+    try:
+        devnull = open(os.devnull, 'w')
+        if subprocess.call(["which", binary], stdout=devnull, stderr=subprocess.STDOUT) != 0:
+            devnull.close()
+            return False
+        devnull.close()
+    except OSError as e:
+        return False
+    return True
 
 class Mkvrg:
     VERBOSITY_SILENT = -1
@@ -91,6 +114,7 @@ class Mkvrg:
             return
 
     def get_mkvinfo(self):
+        """Get matroska information for current file."""
         with open(self.cur_path, "rb") as handle:
             mkv = enzyme.MKV(handle)
         tracks = len(mkv.audio_tracks)

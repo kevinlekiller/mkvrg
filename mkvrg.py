@@ -1,20 +1,22 @@
 #!/usr/bin/env python
 
-
-# Issues: enzyme returns the "track number" like mkvinfo does, but bs1770gain requires the "track ID"
-# Might need to drop enzyme
-
+from __future__ import print_function
 import sys
 import os
 import fnmatch
-import magic
-import enzyme
 import subprocess
+import shlex
+import re
+import tempfile
+try:
+    from StringIO import StringIO
+except ImportError:
+    from io import StringIO
 from argparse import ArgumentParser
 
 
 def main(argv):
-    mkvrg = Mkvrg("mkvrg")
+    mkvrg = Mkvrg()
     check_binaries(mkvrg)
     mkvrg.start(parse_args(mkvrg))
     return 0
@@ -36,6 +38,8 @@ def parse_args(mkvrg):
     mkvrg.force = args.force
     mkvrg.minsize = args.minsize
     mkvrg.verify = args.verify
+    if mkvrg.verify and not check_binary("mediainfo"):
+        mkvrg.print_message("You enabled the --verify option but you do not have mediainfo installed.", mkvrg.MERROR)
     mkvrg.verbosity = args.verbosity
     if not args.paths:
         mkvrg.print_message("No path(s) given, processing current working directory recursively.", mkvrg.MINFO)
@@ -45,7 +49,7 @@ def parse_args(mkvrg):
 
 def check_binaries(mkvrg):
     """Check if all required binaries are in PATH."""
-    binaries = ["which", "bs1770gain", "mkvpropedit"]
+    binaries = ["which", "bs1770gain", "mkvpropedit", "file"]
     for binary in binaries:
         if not check_binary(binary):
             mkvrg.print_message("The program '" + binary + "' is required.", mkvrg.MERROR)
@@ -75,22 +79,33 @@ class Mkvrg:
     MNOTICE = 1
     MINFO = 0
 
-    def __init__(self, name):
-        self.name = name
-        self.default_track = False
-        self.exit = False
-        self.force = False
+    def __init__(self):
+        self.default_track = self.exit = self.force = self.verify = False
         self.minsize = 0
         self.verbosity = self.VERBOSITY_NORMAL
-        self.verify = False
 
         self.cur_path = ""
-        # For mkvpropedit
-        self.cur_tracknum = 0
-        # For bs1770gain
-        self.cur_trackid = 0
+        # Track number is for mkvpropedit, track id is for bs1770gain
+        self.tracks = {}
         self.mkv_info = []
         self.track_count = 0
+
+        self.tmp_file = ""
+        self.tmp_handle = None
+        self.__make_temp_file()
+
+        self.ref_loudness = self.integrated = self.range = self.true_peak = ""
+
+        self.__get_ref_loudness()
+        if self.ref_loudness == "":
+            self.print_message("Could not find reference replaygain loudness from bs1770gain.", self.MERROR)
+            exit(1)
+
+    def __del__(self):
+        if os.path.isfile(self.tmp_file):
+            os.remove(self.tmp_file)
+        if self.tmp_handle:
+            os.close(self.tmp_handle)
 
     def start(self, args):
         """Sort through paths to see if they are directories or normal files."""
@@ -102,6 +117,19 @@ class Mkvrg:
                 self.__process_file(arg)
             else:
                 self.print_message("This does not look like a valid path: " + arg, self.MNOTICE)
+
+    def __get_ref_loudness(self):
+        """Get default replaygain reference loudness from bs1770gain."""
+        buf = self.__run_command("bs1770gain --help", stderr=subprocess.STDOUT)
+        if not buf:
+            return
+        buf = re.search("\(([-\d.]+\s+LUFS), default\)", buf)
+        if "LUFS" not in buf.group(1):
+            return
+        self.ref_loudness = buf.group(1)
+
+    def __make_temp_file(self):
+        self.tmp_handle, self.tmp_file = tempfile.mkstemp()
 
     def __process_dir(self, directory):
         """Find mkv/mkva/mk3d files in directories"""
@@ -118,56 +146,93 @@ class Mkvrg:
         self.cur_trackid = 0
         self.mkv_info = []
         self.print_message("Processing file: " + self.cur_path)
-        if not self.test_matroska(self.cur_path):
+        if "matroska" not in self.__run_command("file " + self.cur_path).lower():
             self.print_message("File is not matroska.", self.MWARNING)
             self.__do_exit()
             return
+        if not self.__check_tags():
+            return
+        self.__get_tracks()
+        if not self.__process_tracks():
+            return
+        exit(1)
         if not self.__get_mkvinfo():
             return
 
-    def __get_mkvinfo(self):
-        """Get matroska information for current file."""
-        try:
-            with open(self.cur_path, "rb") as handle:
-                self.mkv_info = enzyme.MKV(handle)
-        except enzyme.exceptions.MalformedMKVError as e:
-            return False
-        except IOError as e:
-            return False
-        self.track_count = len(self.mkv_info.audio_tracks)
-        if not self.track_count:
-            self.print_message("Could not find number of audio tracks.", self.MWARNING)
-            self.__do_exit()
-            return False
-        self.print_message("The file has " + str(self.track_count) + " audio tracks.", self.MDEBUG)
-        self.__process_tracks()
+    def __get_tracks(self):
+        """Get audio track numbers from bs1770gain"""
+        buf = StringIO(self.__run_command("bs1770gain -l " + self.cur_path, subprocess.STDOUT, universal_newlines=True))
+        self.tracks = {}
+        i = 0
+        for line in buf:
+            if "Audio" in line and "Stream" in line:
+                i += 1
+                if self.default_track == True and "default" not in line:
+                    print("Skipping audio track " + i + ", you enabled --default")
+                    continue
+                matches = re.search("Stream\s*#\d+:(\d+).+?Audio", line)
+                if not matches:
+                    print("Problem finding track number for track id " + str(i), self.MWARNING)
+                    continue
+
+                self.tracks[i] = matches.group(1)
 
     def __process_tracks(self):
-        for track in range(0, self.track_count):
-            self.cur_tracknum += 1
-            self.cur_trackid = self.mkv_info.audio_tracks[track].number
-            self.print_message("Track: " + str(self.cur_trackid), self.MDEBUG)
-            if self.default_track == True:
-                if self.mkv_info.audio_tracks[track].default == True:
-                    self.__process_track()
-                    continue
-                else:
-                    self.print_message("Skipping track " + str(self.cur_trackid) + ", --default option is on.", self.MINFO)
-                    continue
-            self.__process_track()
+        if not self.tracks:
+            print("No audio tracks found in the file.", self.MERROR)
+            return False
+        for tracknum, trackid in self.tracks.items():
+            self.print_message("Found track number: " + str(tracknum) + ", track id: " + str(trackid), self.MDEBUG)
+            self.__get_bs1770gain_info(trackid)
 
-    def __process_track(self):
-        """Run the track through bs1770gain and mkvpropedit, check if tags were applied."""
-        if not self.__check_tags():
-            return
-        if not self.__analyze_track():
-            return
-        if not self.__apply_tags():
-            return
+
+    def __get_bs1770gain_info(self, trackid):
+        handle = subprocess.Popen("bs1770gain --audio " + str(trackid) + " -rt " + self.cur_path, stdout=subprocess.PIPE, shell=True)
+        if not handle:
+            self.print_message("Problem running bs1770gain.", self.MERROR)
+            return False
+        lines = ""
+        while True:
+            line = handle.stdout.read(1)
+            if line == "" and handle.poll() != None:
+                break
+            if line != "":
+                lines = lines + line
+                sys.stdout.write(line)
+                sys.stdout.flush()
+        lines = StringIO(lines)
+        if not lines:
+            self.print_message("Problem parsing bs1770gain output.", self.MERROR)
+            return False
+        self.integrated = self.range = self.true_peak = ""
+        for line in lines:
+            if "ALBUM" in line:
+                break
+            elif "integrated" in line and self.integrated == "":
+                matches = re.search("([-\d.]+\s*LU)\s*$", line)
+                if not matches:
+                    break
+                self.integrated = matches.group(1)
+            elif "range" in line and self.range == "":
+                matches = re.search("([-\d.]+\s*LUFS)\s*$", line)
+                if not matches:
+                    break
+                self.range = matches.group(1)
+            elif "true peak" in line and self.true_peak == "":
+                matches = re.search("([-\d.]+)\s*$", line)
+                if not matches:
+                    break
+                self.true_peak = matches.group(1)
+        if not self.integrated or not self.true_peak or not self.range:
+            self.print_message("Could not find replaygain info from bs1770gain.", self.MERROR)
+            return False
+        self.print_message("Found replaygain info (integrated: " + self.integrated +
+                           ") (range: " + self.range + ") (truepeak: " + self.true_peak + ")", self.MDEBUG)
+        return True
 
     def __analyze_track(self):
         """Run bs1770gain on the file to get replaygain information."""
-        self.run_command([
+        self.__run_command([
             "bs1770gain",
             "--audio", str(self.cur_trackid),
             " -rt ",
@@ -184,12 +249,10 @@ class Mkvrg:
         if first_check == True and self.force == True:
             self.print_message("Skipping replaygain tags check, --force is on.", self.MINFO)
             return True
-        if not len(self.mkv_info.tags) and first_check == False:
-            self.print_message("No tags at all found in the file.", self.MERROR)
-            self.__do_exit()
-            return False
-        if "ITU-R BS.1770" in str(self.mkv_info.tags):
+        if "ITU-R BS.1770" in self.__run_command("mediainfo " + self.cur_path + ' --Inform="Audio;%REPLAYGAIN_ALGORITHM%"'):
             self.print_message("Replaying tags found in file.", self.MINFO)
+            if first_check:
+                return False
             return True
         if first_check == True:
             self.print_message("No replaygain tags found in file.", self.MINFO)
@@ -221,20 +284,15 @@ class Mkvrg:
         elif mtype == self.MDEBUG:
             print("\033[95mDEBUG: " + message + "\033[0m")
 
-    def run_command(self, command):
+    def __run_command(self, command, stderr=None, universal_newlines=False):
+        ret = ""
         try:
-            print(str(subprocess.check_output(command)))
+            ret = str(subprocess.check_output(shlex.split(command), stderr=stderr, universal_newlines=universal_newlines))
         except subprocess.CalledProcessError as e:
-            return False
-
-
-    @staticmethod
-    def test_matroska(path):
-        """Test if file is Matroska data."""
-        with magic.Magic() as m:
-            if "matroska" in m.id_filename(path).lower():
-                return True
-        return False
+            ""
+        except OSError as e:
+            ""
+        return ret
 
 if __name__ == '__main__':
     main(sys.argv)

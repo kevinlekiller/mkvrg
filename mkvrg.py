@@ -63,11 +63,7 @@ def parse_args(mkvrg):
 
 def check_binaries(mkvrg):
     """Check if all required binaries are in PATH."""
-<<<<<<< HEAD
-    binaries = ["bs1770gain", "mkvpropedit", "file"]
-=======
     binaries = ["bs1770gain", "mkvpropedit"]
->>>>>>> refs/remotes/origin/python
     for binary in binaries:
         if not check_binary(binary):
             mkvrg.print_message("The program '" + binary + "' is required.", mkvrg.MERROR)

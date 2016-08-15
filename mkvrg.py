@@ -26,10 +26,10 @@ def parse_args(mkvrg):
     """Parse command line arguments."""
     parser = ArgumentParser()
     parser.add_argument("-d", "--default", help="Only process the default audio track?", action="store_true")
-    parser.add_argument("-m", "--minsize", type=int, help="Minimum size of matroska file in MB", default=0)
+    parser.add_argument("-m", "--minsize", type=int, help="Minimum size of matroska file in bytes.", default=0)
     parser.add_argument("-c", "--verify", help="Verify if matroska file has replaygain tags before and after analyzing.", action="store_true")
     parser.add_argument("-f", "--force", help="Force scanning files for replaygain, even if they already have replaygain tags.", action="store_true")
-    parser.add_argument("-e", "--exit", help="Stop and exit if any problems are encountered during file processing.", action="store_true")
+    parser.add_argument("-e", "--exit", help="Stop and exit if any problems are encountered.", action="store_true")
     parser.add_argument("-v", "--verbosity", type=int, help="Level of verbosity. (0 = normal, -1 = silent, 1 = debug).", default=0, choices=[-1,0,1])
     parser.add_argument("paths", help="Path(s) to folder(s) or file(s) to scan matroska files for replaygain info.", nargs="*")
     args = parser.parse_args()
@@ -37,9 +37,15 @@ def parse_args(mkvrg):
     mkvrg.exit = args.exit
     mkvrg.force = args.force
     mkvrg.minsize = args.minsize
+    if mkvrg.minsize < 0:
+        mkvrg.print_message("The --minsize value must be a positive number.", mkvrg.MERROR)
+        mkvrg.print_message("Setting --minsize to 0", mkvrg.MNOTICE)
+        mkvrg.minsize = 0
     mkvrg.verify = args.verify
     if mkvrg.verify and not check_binary("mediainfo"):
         mkvrg.print_message("You enabled the --verify option but you do not have mediainfo installed.", mkvrg.MERROR)
+        mkvrg.print_message("Setting --verify to false.", mkvrg.MNOTICE)
+        mkvrg.verify = False
     mkvrg.verbosity = args.verbosity
     if not args.paths:
         mkvrg.print_message("No path(s) given, processing current working directory recursively.", mkvrg.MINFO)
@@ -85,23 +91,21 @@ class Mkvrg:
         self.verbosity = self.VERBOSITY_NORMAL
 
         self.cur_path = ""
-        # Track number is for mkvpropedit, track id is for bs1770gain
-        self.tracks = {}
-        self.mkv_info = []
         self.track_count = 0
+        self.track = {}
 
         self.tmp_file = ""
         self.tmp_handle = None
         self.__make_temp_file()
 
         self.ref_loudness = self.integrated = self.range = self.true_peak = ""
-
         self.__get_ref_loudness()
         if self.ref_loudness == "":
             self.print_message("Could not find reference replaygain loudness from bs1770gain.", self.MERROR)
             exit(1)
 
     def __del__(self):
+        """Cleans temp file on destruct."""
         if os.path.isfile(self.tmp_file):
             os.remove(self.tmp_file)
         if self.tmp_handle:
@@ -142,13 +146,12 @@ class Mkvrg:
     def __process_file(self, path):
         """Process a matroska file, analyzing it with bs1770gain and applying tags."""
         self.cur_path = path
-        self.cur_tracknum = 0
-        self.cur_trackid = 0
-        self.mkv_info = []
         self.print_message("Processing file: " + self.cur_path)
         if "matroska" not in self.__run_command("file " + self.cur_path).lower():
-            self.print_message("File is not matroska.", self.MWARNING)
-            self.__do_exit()
+            self.print_message("File does not seem to contain Matroska data.", self.ERROR)
+            return
+        if self.minsize > 0 and os.path.getsize(self.cur_path) < self.minsize:
+            self.print_message("The file is smaller than your --minsize setting, skipping.", self.MNOTICE)
             return
         if not self.__check_tags():
             return
@@ -156,8 +159,6 @@ class Mkvrg:
         if not self.__process_tracks():
             return
         exit(1)
-        if not self.__get_mkvinfo():
-            return
 
     def __get_tracks(self):
         """Get audio track numbers from bs1770gain"""
@@ -168,23 +169,21 @@ class Mkvrg:
             if "Audio" in line and "Stream" in line:
                 i += 1
                 if self.default_track == True and "default" not in line:
-                    print("Skipping audio track " + i + ", you enabled --default")
+                    self.print_message("Skipping non default audio track " + str(i) + ", you enabled --default")
                     continue
                 matches = re.search("Stream\s*#\d+:(\d+).+?Audio", line)
                 if not matches:
-                    print("Problem finding track number for track id " + str(i), self.MWARNING)
+                    self.print_message("Problem finding track number for track " + str(i), self.MWARNING)
                     continue
-
                 self.tracks[i] = matches.group(1)
 
     def __process_tracks(self):
         if not self.tracks:
-            print("No audio tracks found in the file.", self.MERROR)
+            self.print_message("No audio tracks found in the file.", self.MERROR)
             return False
         for tracknum, trackid in self.tracks.items():
             self.print_message("Found track number: " + str(tracknum) + ", track id: " + str(trackid), self.MDEBUG)
             self.__get_bs1770gain_info(trackid)
-
 
     def __get_bs1770gain_info(self, trackid):
         handle = subprocess.Popen("bs1770gain --audio " + str(trackid) + " -rt " + self.cur_path, stdout=subprocess.PIPE, shell=True)
@@ -230,15 +229,6 @@ class Mkvrg:
                            ") (range: " + self.range + ") (truepeak: " + self.true_peak + ")", self.MDEBUG)
         return True
 
-    def __analyze_track(self):
-        """Run bs1770gain on the file to get replaygain information."""
-        self.__run_command([
-            "bs1770gain",
-            "--audio", str(self.cur_trackid),
-            " -rt ",
-            self.cur_path
-        ])
-
     def __apply_tags(self):
         """Apply replaygain tags with mkvpropedit."""
 
@@ -258,7 +248,6 @@ class Mkvrg:
             self.print_message("No replaygain tags found in file.", self.MINFO)
             return True
         self.print_message("No replaygain tags found in file.", self.MERROR)
-        self.__do_exit()
         return False
 
     def __do_exit(self, code=1):
@@ -281,6 +270,7 @@ class Mkvrg:
             print("\033[93mWARNING: " + message + "\033\[0m")
         elif mtype == self.MERROR:
             print("\033[91mERROR: " + message + "\033[0m")
+            self.__do_exit()
         elif mtype == self.MDEBUG:
             print("\033[95mDEBUG: " + message + "\033[0m")
 

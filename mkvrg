@@ -158,7 +158,8 @@ while read file; do
 </Tags>" > "$TMPFILE"
         
         echo "INFO: Applying gain ($TRACKGAIN) / true peak ($TRACKPEAK) / range ($TRACKRANGE) for track $track on file '$file'."
-        
+
+	((track++)) # because the order is the same in mkvpropedit but numbering starts at 1
         mkvpropedit --tags track:"$track":"$TMPFILE" "$file"
         
         if [[ $VERIFY == true ]] && [[ ! $(mediainfo "$file") =~ "ITU-R BS.1770" ]]; then

@@ -114,10 +114,8 @@ while read file; do
         continue
     fi
     
-    trackindex=0
     fileprocessed=0
     for track in $tracks; do
-        ((trackindex++))
 
         echo "INFO: Running bs1770gain, this can take a while. (track $track on file '$file')"
         RGINFO=$(bs1770gain --audio "$track" -rt "$file" | tee /dev/stderr | tr "\r\n" " " | grep -io "analyzing.*ALBUM")
@@ -161,7 +159,7 @@ while read file; do
         
         echo "INFO: Applying gain ($TRACKGAIN) / true peak ($TRACKPEAK) / range ($TRACKRANGE) for track $track on file '$file'."
         
-        mkvpropedit --tags track:a"$trackindex":"$TMPFILE" "$file"
+        mkvpropedit --tags track:"$track":"$TMPFILE" "$file"
         
         if [[ $VERIFY == true ]] && [[ ! $(mediainfo "$file") =~ "ITU-R BS.1770" ]]; then
             echo -e "\e[93mWARNING: Replaygain has not been applied for track $track on file '$file'.\e[0m"

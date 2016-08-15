@@ -8,6 +8,7 @@ import subprocess
 import shlex
 import re
 import tempfile
+import mimetypes
 import xml.etree.cElementTree as xml
 try:
     from StringIO import StringIO
@@ -146,7 +147,7 @@ class Mkvrg:
         """Process a matroska file, analyzing it with bs1770gain and applying tags."""
         self.cur_path = path
         self.print_message("Processing file: " + self.cur_path)
-        if "matroska" not in self.__run_command("file " + self.cur_path).lower():
+        if "matroska" not in mimetypes.guess_type(self.cur_path).lower():
             self.print_message("File does not seem to contain Matroska data.", self.MERROR)
             return
         if self.minsize > 0 and os.path.getsize(self.cur_path) < self.minsize:

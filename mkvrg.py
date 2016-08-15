@@ -29,11 +29,17 @@ def parse_args(mkvrg):
     parser = ArgumentParser()
     parser.add_argument("-d", "--default", help="Only process the default audio track?", action="store_true")
     parser.add_argument("-m", "--minsize", type=int, help="Minimum size of matroska file in bytes.", default=0)
-    parser.add_argument("-c", "--verify", help="Verify if matroska file has replaygain tags before and after analyzing.", action="store_true")
-    parser.add_argument("-f", "--force", help="Force scanning files for replaygain, even if they already have replaygain tags.", action="store_true")
+    parser.add_argument("-c", "--verify",
+                        help="Verify if matroska file has replaygain tags before and after analyzing.",
+                        action="store_true")
+    parser.add_argument("-f", "--force",
+                        help="Force scanning files for replaygain, even if they already have replaygain tags.",
+                        action="store_true")
     parser.add_argument("-e", "--exit", help="Stop and exit if any problems are encountered.", action="store_true")
-    parser.add_argument("-v", "--verbosity", type=int, help="Level of verbosity. (0 = normal, -1 = silent, 1 = debug).", default=0, choices=[-1,0,1])
-    parser.add_argument("paths", help="Path(s) to folder(s) or file(s) to scan matroska files for replaygain info.", nargs="*")
+    parser.add_argument("-v", "--verbosity", type=int,
+                        help="Level of verbosity. (0 = normal, -1 = silent, 1 = debug).", default=0, choices=[-1,0,1])
+    parser.add_argument("paths", help="Path(s) to folder(s) or file(s) to scan matroska files for replaygain info.",
+                        nargs="*")
     args = parser.parse_args()
     mkvrg.default_track = args.default
     mkvrg.exit = args.exit
@@ -192,7 +198,8 @@ class Mkvrg:
 
     def __get_bs1770gain_info(self, trackid):
         self.print_message("Getting replaygain info for track id " + trackid, self.MDEBUG)
-        handle = subprocess.Popen("bs1770gain --audio " + trackid + " -rt " + self.cur_path, stdout=subprocess.PIPE, shell=True)
+        handle = subprocess.Popen("bs1770gain --audio " + trackid + " -rt " + self.cur_path, stdout=subprocess.PIPE,
+                                  shell=True)
         if not handle:
             self.print_message("Problem running bs1770gain.", self.MERROR)
             return False
@@ -271,7 +278,8 @@ class Mkvrg:
     def __apply_tags(self, trackid):
         """Apply replaygain tags with mkvpropedit."""
         self.print_message("Applying tags with mkvpropedit for track id " + trackid, self.MDEBUG)
-        if not self.__run_command("mkvpropedit --tags track:" + str(int(trackid) + 1) + ":" + self.tmp_file + " " + self.cur_path):
+        if not self.__run_command("mkvpropedit --tags track:" + str(int(trackid) + 1) + ":" + self.tmp_file + " " +
+                                          self.cur_path):
             self.print_message("Problem applying replaygain tags to " + self.cur_path, self.MERROR)
             return False
         return True
@@ -283,7 +291,8 @@ class Mkvrg:
         if first_check == True and self.force == True:
             self.print_message("Skipping replaygain tags check, --force is on.")
             return True
-        if "ITU-R BS.1770" in self.__run_command("mediainfo " + self.cur_path + ' --Inform="Audio;%REPLAYGAIN_ALGORITHM%"'):
+        if "ITU-R BS.1770" in self.__run_command("mediainfo " + self.cur_path +
+                                                         ' --Inform="Audio;%REPLAYGAIN_ALGORITHM%"'):
             self.print_message("Replaygain tags found in file.")
             if first_check:
                 return False
@@ -322,7 +331,8 @@ class Mkvrg:
         """Run a command in a shell, return the output as a string."""
         ret = ""
         try:
-            ret = str(subprocess.check_output(shlex.split(command), stderr=stderr, universal_newlines=universal_newlines))
+            ret = str(subprocess.check_output(shlex.split(command), stderr=stderr,
+                                              universal_newlines=universal_newlines))
         except subprocess.CalledProcessError as e:
             ""
         except OSError as e:

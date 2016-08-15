@@ -107,8 +107,8 @@ class Mkvrg:
 
     def __del__(self):
         """Cleans temp file on destruct."""
-        #if os.path.isfile(self.tmp_file):
-         #   os.remove(self.tmp_file)
+        if os.path.isfile(self.tmp_file):
+            os.remove(self.tmp_file)
         if self.tmp_handle:
             os.close(self.tmp_handle)
 

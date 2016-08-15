@@ -148,7 +148,7 @@ class Mkvrg:
         self.cur_path = path
         self.print_message("Processing file: " + self.cur_path)
         if "matroska" not in self.__run_command("file " + self.cur_path).lower():
-            self.print_message("File does not seem to contain Matroska data.", self.ERROR)
+            self.print_message("File does not seem to contain Matroska data.", self.MERROR)
             return
         if self.minsize > 0 and os.path.getsize(self.cur_path) < self.minsize:
             self.print_message("The file is smaller than your --minsize setting, skipping.", self.MNOTICE)
@@ -240,7 +240,7 @@ class Mkvrg:
             self.print_message("Skipping replaygain tags check, --force is on.", self.MINFO)
             return True
         if "ITU-R BS.1770" in self.__run_command("mediainfo " + self.cur_path + ' --Inform="Audio;%REPLAYGAIN_ALGORITHM%"'):
-            self.print_message("Replaying tags found in file.", self.MINFO)
+            self.print_message("Replaygain tags found in file.", self.MINFO)
             if first_check:
                 return False
             return True

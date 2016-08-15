@@ -8,6 +8,7 @@ import subprocess
 import shlex
 import re
 import tempfile
+import xml.etree.cElementTree as xml
 try:
     from StringIO import StringIO
 except ImportError:
@@ -105,8 +106,8 @@ class Mkvrg:
 
     def __del__(self):
         """Cleans temp file on destruct."""
-        if os.path.isfile(self.tmp_file):
-            os.remove(self.tmp_file)
+        #if os.path.isfile(self.tmp_file):
+         #   os.remove(self.tmp_file)
         if self.tmp_handle:
             os.close(self.tmp_handle)
 
@@ -155,11 +156,11 @@ class Mkvrg:
         if not self.__check_tags():
             return
         self.__get_tracks()
-        if not self.__process_tracks():
-            return
+        self.__process_tracks()
         exit(1)
 
     def __get_tracks(self):
+        self.print_message("Getting tracks list.", self.MDEBUG)
         """Get audio track numbers from bs1770gain"""
         buf = StringIO(self.__run_command("bs1770gain -l " + self.cur_path, subprocess.STDOUT, universal_newlines=True))
         self.tracks = {}
@@ -177,15 +178,22 @@ class Mkvrg:
                 self.tracks[i] = matches.group(1)
 
     def __process_tracks(self):
+        self.print_message("Processing audio tracks.", self.MDEBUG)
         if not self.tracks:
             self.print_message("No audio tracks found in the file.", self.MERROR)
             return False
         for tracknum, trackid in self.tracks.items():
-            self.print_message("Found track number: " + str(tracknum) + ", track id: " + str(trackid), self.MDEBUG)
-            self.__get_bs1770gain_info(trackid)
+            self.print_message("Found track number: " + str(tracknum) + ", track id: " + trackid, self.MDEBUG)
+            if not self.__get_bs1770gain_info(trackid):
+                continue
+            if not self.__write_xml_file():
+                continue
+            self.__apply_tags(trackid)
+        self.__check_tags(False)
 
     def __get_bs1770gain_info(self, trackid):
-        handle = subprocess.Popen("bs1770gain --audio " + str(trackid) + " -rt " + self.cur_path, stdout=subprocess.PIPE, shell=True)
+        self.print_message("Getting replaygain info for track id " + trackid, self.MDEBUG)
+        handle = subprocess.Popen("bs1770gain --audio " + trackid + " -rt " + self.cur_path, stdout=subprocess.PIPE, shell=True)
         if not handle:
             self.print_message("Problem running bs1770gain.", self.MERROR)
             return False
@@ -228,23 +236,61 @@ class Mkvrg:
                            ") (range: " + self.range + ") (truepeak: " + self.true_peak + ")", self.MDEBUG)
         return True
 
-    def __apply_tags(self):
+    def __write_xml_file(self):
+        """Write XML file with tags to temp file, for mkvpropedit."""
+        self.print_message("Writing XML file to " + self.tmp_file, self.MDEBUG)
+        self.__clr_tmp_file()
+        tags = xml.Element("Tags")
+        tag = xml.SubElement(tags, "Tag")
+        xml.SubElement(tag, "Targets")
+        simple = xml.SubElement(tag, "Simple")
+        xml.SubElement(simple, "Name").text = "REPLAYGAIN_ALGORITHM"
+        xml.SubElement(simple, "String").text = "ITU-R BS.1770"
+        simple = xml.SubElement(tag, "Simple")
+        xml.SubElement(simple, "Name").text = "REPLAYGAIN_REFERENCE_LOUDNESS"
+        xml.SubElement(simple, "String").text = self.ref_loudness
+        simple = xml.SubElement(tag, "Simple")
+        xml.SubElement(simple, "Name").text = "REPLAYGAIN_TRACK_GAIN"
+        xml.SubElement(simple, "String").text = self.integrated
+        simple = xml.SubElement(tag, "Simple")
+        xml.SubElement(simple, "Name").text = "REPLAYGAIN_TRACK_RANGE"
+        xml.SubElement(simple, "String").text = self.range
+        simple = xml.SubElement(tag, "Simple")
+        xml.SubElement(simple, "Name").text = "REPLAYGAIN_TRACK_PEAK"
+        xml.SubElement(simple, "String").text = self.true_peak
+        xml.ElementTree(tags).write(self.tmp_file)
+        if os.path.getsize(self.tmp_file) == 0:
+            self.print_message("Could not write XML to temp file.", self.MERROR)
+            return False
+        return True
+
+    def __clr_tmp_file(self):
+        if os.path.getsize(self.tmp_file) != 0:
+            os.ftruncate(self.tmp_handle, 0)
+            os.lseek(self.tmp_handle, 0, os.SEEK_SET)
+
+    def __apply_tags(self, trackid):
         """Apply replaygain tags with mkvpropedit."""
+        self.print_message("Applying tags with mkvpropedit for track id " + trackid, self.MDEBUG)
+        if not self.__run_command("mkvpropedit --tags track:" + str(int(trackid) + 1) + ":" + self.tmp_file + " " + self.cur_path):
+            self.print_message("Problem applying replaygain tags to " + self.cur_path, self.MERROR)
+            return False
+        return True
 
     def __check_tags(self, first_check=True):
         """Check if matroska file has replaygain tags."""
         if self.verify == False :
             return True
         if first_check == True and self.force == True:
-            self.print_message("Skipping replaygain tags check, --force is on.", self.MINFO)
+            self.print_message("Skipping replaygain tags check, --force is on.")
             return True
         if "ITU-R BS.1770" in self.__run_command("mediainfo " + self.cur_path + ' --Inform="Audio;%REPLAYGAIN_ALGORITHM%"'):
-            self.print_message("Replaygain tags found in file.", self.MINFO)
+            self.print_message("Replaygain tags found in file.")
             if first_check:
                 return False
             return True
         if first_check == True:
-            self.print_message("No replaygain tags found in file.", self.MINFO)
+            self.print_message("No replaygain tags found in file.")
             return True
         self.print_message("No replaygain tags found in file.", self.MERROR)
         return False
@@ -252,10 +298,10 @@ class Mkvrg:
     def __do_exit(self, code=1):
         """Exit if --exit option is enabled."""
         if self.exit:
-            self.print_message("The --exit option is enabled, exiting.", self.MINFO)
+            self.print_message("The --exit option is enabled, exiting.", self.MNOTICE)
             exit(code)
 
-    def print_message(self, message, mtype=0):
+    def print_message(self, message, mtype=MINFO):
         """Print message with colors, appends type of message."""
         if self.verbosity == self.VERBOSITY_SILENT:
             return
@@ -274,6 +320,7 @@ class Mkvrg:
             print("\033[95mDEBUG: " + message + "\033[0m")
 
     def __run_command(self, command, stderr=None, universal_newlines=False):
+        """Run a command in a shell, return the output as a string."""
         ret = ""
         try:
             ret = str(subprocess.check_output(shlex.split(command), stderr=stderr, universal_newlines=universal_newlines))

@@ -66,9 +66,7 @@ def check_binary(binary):
     """Check if a binary is in PATH."""
     try:
         devnull = open(os.devnull, 'w')
-        if subprocess.call(["which", binary], stdout=devnull, stderr=subprocess.STDOUT) != 0:
-            devnull.close()
-            return False
+        subprocess.call([binary], stdout=devnull, stderr=devnull)
         devnull.close()
     except OSError as e:
         return False

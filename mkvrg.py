@@ -55,7 +55,7 @@ def parse_args(mkvrg):
 
 def check_binaries(mkvrg):
     """Check if all required binaries are in PATH."""
-    binaries = ["which", "bs1770gain", "mkvpropedit", "file"]
+    binaries = ["bs1770gain", "mkvpropedit", "file"]
     for binary in binaries:
         if not check_binary(binary):
             mkvrg.print_message("The program '" + binary + "' is required.", mkvrg.MERROR)
@@ -64,13 +64,14 @@ def check_binaries(mkvrg):
 
 def check_binary(binary):
     """Check if a binary is in PATH."""
+    result = True
     try:
         devnull = open(os.devnull, 'w')
         subprocess.call([binary], stdout=devnull, stderr=devnull)
-        devnull.close()
     except OSError as e:
-        return False
-    return True
+        result = False
+    devnull.close()
+    return result
 
 class Mkvrg:
     VERBOSITY_SILENT = -1

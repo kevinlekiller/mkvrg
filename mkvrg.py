@@ -158,7 +158,6 @@ class Mkvrg:
             return
         self.__get_tracks()
         self.__process_tracks()
-        exit(1)
 
     def __get_tracks(self):
         self.print_message("Getting tracks list.", self.MDEBUG)

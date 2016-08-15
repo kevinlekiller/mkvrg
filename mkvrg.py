@@ -27,6 +27,8 @@ def main(argv):
 def parse_args(mkvrg):
     """Parse command line arguments."""
     parser = ArgumentParser()
+    parser.add_argument("-s", "--samplepeak", help="Use the sample peak option instead of true" +
+                                                   " peak for bs1770gain, this is much faster.", action="store_true")
     parser.add_argument("-d", "--default", help="Only process the default audio track?", action="store_true")
     parser.add_argument("-m", "--minsize", type=int, help="Minimum size of matroska file in bytes.", default=0)
     parser.add_argument("-c", "--verify",
@@ -41,6 +43,7 @@ def parse_args(mkvrg):
     parser.add_argument("paths", help="Path(s) to folder(s) or file(s) to scan matroska files for replaygain info.",
                         nargs="*")
     args = parser.parse_args()
+    mkvrg.sample_peak = args.samplepeak
     mkvrg.default_track = args.default
     mkvrg.exit = args.exit
     mkvrg.force = args.force
@@ -93,7 +96,7 @@ class Mkvrg:
     MINFO = 0
 
     def __init__(self):
-        self.default_track = self.exit = self.force = self.verify = False
+        self.default_track = self.exit = self.force = self.verify = self.sample_peak = False
         self.minsize = 0
         self.verbosity = self.VERBOSITY_NORMAL
 
@@ -105,7 +108,7 @@ class Mkvrg:
         self.tmp_handle = None
         self.__make_temp_file()
 
-        self.ref_loudness = self.integrated = self.range = self.true_peak = ""
+        self.ref_loudness = self.rg_integrated = self.rg_range = self.rg_peak = ""
         self.__get_ref_loudness()
         if self.ref_loudness == "":
             self.print_message("Could not find reference replaygain loudness from bs1770gain.", self.MERROR)
@@ -154,7 +157,8 @@ class Mkvrg:
         """Process a matroska file, analyzing it with bs1770gain and applying tags."""
         self.cur_path = path
         self.print_message("Processing file: " + self.cur_path)
-        if "matroska" not in mimetypes.guess_type(self.cur_path).lower():
+        magic, encoding = mimetypes.guess_type(self.cur_path)
+        if "matroska" not in magic.lower():
             self.print_message("File does not seem to contain Matroska data.", self.MERROR)
             return
         if self.minsize > 0 and os.path.getsize(self.cur_path) < self.minsize:
@@ -199,8 +203,8 @@ class Mkvrg:
 
     def __get_bs1770gain_info(self, trackid):
         self.print_message("Getting replaygain info for track id " + trackid, self.MDEBUG)
-        handle = subprocess.Popen("bs1770gain --audio " + trackid + " -rt " + self.cur_path, stdout=subprocess.PIPE,
-                                  shell=True)
+        handle = subprocess.Popen("bs1770gain --audio " + trackid + " -r " + ("-p " if self.sample_peak else "-t ") +
+                                  self.cur_path, stdout=subprocess.PIPE, shell=True)
         if not handle:
             self.print_message("Problem running bs1770gain.", self.MERROR)
             return False
@@ -217,30 +221,30 @@ class Mkvrg:
         if not lines:
             self.print_message("Problem parsing bs1770gain output.", self.MERROR)
             return False
-        self.integrated = self.range = self.true_peak = ""
+        self.rg_integrated = self.rg_range = self.rg_peak = ""
         for line in lines:
             if "ALBUM" in line:
                 break
-            elif "integrated" in line and self.integrated == "":
+            elif "integrated" in line and self.rg_integrated == "":
                 matches = re.search("([-\d.]+\s*LU)\s*$", line)
                 if not matches:
                     break
-                self.integrated = matches.group(1)
-            elif "range" in line and self.range == "":
+                self.rg_integrated = matches.group(1)
+            elif "range" in line and self.rg_range == "":
                 matches = re.search("([-\d.]+\s*LUFS)\s*$", line)
                 if not matches:
                     break
-                self.range = matches.group(1)
-            elif "true peak" in line and self.true_peak == "":
+                self.rg_range = matches.group(1)
+            elif "peak" in line and self.rg_peak == "":
                 matches = re.search("([-\d.]+)\s*$", line)
                 if not matches:
                     break
-                self.true_peak = matches.group(1)
-        if not self.integrated or not self.true_peak or not self.range:
+                self.rg_peak = matches.group(1)
+        if not self.rg_integrated or not self.rg_peak or not self.rg_range:
             self.print_message("Could not find replaygain info from bs1770gain.", self.MERROR)
             return False
-        self.print_message("Found replaygain info (integrated: " + self.integrated +
-                           ") (range: " + self.range + ") (truepeak: " + self.true_peak + ")", self.MDEBUG)
+        self.print_message("Found replaygain info (integrated: " + self.rg_integrated +
+                           ") (range: " + self.rg_range + ") (truepeak: " + self.rg_peak + ")", self.MDEBUG)
         return True
 
     def __write_xml_file(self):
@@ -258,13 +262,13 @@ class Mkvrg:
         xml.SubElement(simple, "String").text = self.ref_loudness
         simple = xml.SubElement(tag, "Simple")
         xml.SubElement(simple, "Name").text = "REPLAYGAIN_TRACK_GAIN"
-        xml.SubElement(simple, "String").text = self.integrated
+        xml.SubElement(simple, "String").text = self.rg_integrated
         simple = xml.SubElement(tag, "Simple")
         xml.SubElement(simple, "Name").text = "REPLAYGAIN_TRACK_RANGE"
-        xml.SubElement(simple, "String").text = self.range
+        xml.SubElement(simple, "String").text = self.rg_range
         simple = xml.SubElement(tag, "Simple")
         xml.SubElement(simple, "Name").text = "REPLAYGAIN_TRACK_PEAK"
-        xml.SubElement(simple, "String").text = self.true_peak
+        xml.SubElement(simple, "String").text = self.rg_peak
         xml.ElementTree(tags).write(self.tmp_file)
         if os.path.getsize(self.tmp_file) == 0:
             self.print_message("Could not write XML to temp file.", self.MERROR)

@@ -13,6 +13,7 @@ import tempfile
 import mimetypes
 import multiprocessing
 import itertools
+import logging
 import xml.etree.cElementTree as xml
 try:
     from StringIO import StringIO
@@ -24,7 +25,7 @@ from argparse import ArgumentParser
 def main():
     utils = Utils()
     if not utils.files:
-        utils.print_message("No files found to process.", utils.MNOTICE)
+        logging.warning("No files found to process.")
     try:
         ThreadMkvrg(utils)
     except KeyboardInterrupt:

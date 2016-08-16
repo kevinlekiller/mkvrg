@@ -13,6 +13,7 @@ import tempfile
 import mimetypes
 import threading
 import time
+import logging
 import xml.etree.cElementTree as xml
 try:
     from queue import Queue as queue
@@ -28,7 +29,7 @@ from argparse import ArgumentParser
 def main():
     utils = Utils()
     if not utils.files:
-        utils.print_message("No files found to process.", utils.MNOTICE)
+        logging.warning("No files found to process.")
     try:
         ThreadMkvrg(utils)
     except KeyboardInterrupt:

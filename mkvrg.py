@@ -11,14 +11,9 @@ import shlex
 import re
 import tempfile
 import mimetypes
-import threading
-import time
-import logging
+import multiprocessing
+import itertools
 import xml.etree.cElementTree as xml
-try:
-    from queue import Queue as queue
-except ImportError:
-    from Queue import Queue as queue
 try:
     from StringIO import StringIO
 except ImportError:
@@ -29,7 +24,7 @@ from argparse import ArgumentParser
 def main():
     utils = Utils()
     if not utils.files:
-        logging.warning("No files found to process.")
+        utils.print_message("No files found to process.", utils.MNOTICE)
     try:
         ThreadMkvrg(utils)
     except KeyboardInterrupt:
@@ -39,44 +34,40 @@ def main():
     return 0
 
 
-def process_thread(thread, pool, utils):
+def process_thread(thread, queue, utils):
     while True:
+        work = queue.get()
+        if not work:
+            queue.task_done()
+            return
+        print("process " + str(thread) + ": " + str(work))
         mkvrg = Mkvrg(utils)
-        work = pool.get()
         mkvrg.process_file(work)
-        pool.task_done()
+        queue.task_done()
 
 
 class ThreadMkvrg:
     def __init__(self, utils):
-        """"""
-        self.utils = utils
-        self.max_threads = self.utils.threads
-        total_work = len(self.utils.files)
-        if total_work < self.max_threads:
-            self.max_threads = total_work
-        self.queue = queue()
-        self.create_workers()
-        self.set_work()
-        while not self.queue.empty():
-            try:
-                time.sleep(1)
-            except KeyboardInterrupt:
-                print("")
-                utils.print_message("Cleaning up temp files.")
-                utils.cleanup_tmp()
-                return
-        self.queue.join()
+        threads = utils.threads
+        total_work = len(utils.files)
+        if total_work < threads:
+            threads = total_work
 
-    def create_workers(self):
-        for i in range(self.max_threads):
-            worker = threading.Thread(target=process_thread, args=(i, self.queue, self.utils))
-            worker.daemon = True
-            worker.start()
+        manager = multiprocessing.Manager()
+        queue = manager.Queue(threads)
 
-    def set_work(self):
-        for path in self.utils.files:
-            self.queue.put(path)
+        processes = []
+        for i in range(threads):
+            process = multiprocessing.Process(target=process_thread, args=(i, queue, utils))
+            process.start()
+            processes.append(process)
+
+        iterator = itertools.chain(utils.files, (None,)*threads)
+        for work in iterator:
+            queue.put(work)
+
+        for process in processes:
+            process.join()
 
 
 class Utils:

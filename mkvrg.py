@@ -12,9 +12,10 @@ import re
 import tempfile
 import mimetypes
 import threading
+import time
 import xml.etree.cElementTree as xml
 try:
-    from queue import queue as queue
+    from queue import Queue as queue
 except ImportError:
     from Queue import Queue as queue
 try:
@@ -28,12 +29,16 @@ def main():
     utils = Utils()
     if not utils.files:
         utils.print_message("No files found to process.", utils.MNOTICE)
-    ThreadMkvrg(utils)
+    try:
+        ThreadMkvrg(utils)
+    except KeyboardInterrupt:
+        utils.print_message("Cleaning up temp files.")
+        utils.cleanup_tmp()
+        raise
     return 0
 
 
 def process_thread(thread, pool, utils):
-    while True:
         mkvrg = Mkvrg(utils)
         work = pool.get()
         mkvrg.process_file(work)
@@ -51,7 +56,14 @@ class ThreadMkvrg:
         self.queue = queue()
         self.create_workers()
         self.set_work()
-        self.queue.join()
+        while not self.queue.empty():
+            try:
+                time.sleep(1)
+            except KeyboardInterrupt:
+                print("")
+                utils.print_message("Cleaning up temp files.")
+                utils.cleanup_tmp()
+                break
 
     def create_workers(self):
         for i in range(self.max_threads):
@@ -101,6 +113,23 @@ class Utils:
             else:
                 self.print_message("This does not look like a valid path: " + arg, self.MNOTICE)
         del args
+        self.tmp_files = {}
+
+    def cleanup_tmp(self):
+        if not self.tmp_files:
+            return
+        try:
+            self.tmp_files = self.tmp_files.iteritems()
+        except AttributeError:
+            self.tmp_files = self.tmp_files.items()
+        for handle, path in self.tmp_files:
+            if os.path.isfile(path):
+                os.remove(path)
+            if handle:
+                try:
+                    os.close(handle)
+                except OSError:
+                    ""
 
     def print_message(self, message, mtype=MINFO):
         """Print message with colors, appends type of message."""
@@ -323,6 +352,7 @@ class Mkvrg:
         self.cur_path = self.rg_integrated = self.rg_range = self.rg_peak = ""
         self.mk_tmp = MakeTmpFile()
         self.tmp_file = self.mk_tmp.path
+        self.utils.tmp_files[self.mk_tmp.handle] = self.mk_tmp.path
 
     def process_file(self, path):
         """Process a matroska file, analyzing it with bs1770gain and applying tags."""
@@ -377,7 +407,7 @@ class Mkvrg:
             return False
         lines = ""
         while True:
-            line = handle.stdout.read(1)
+            line = handle.stdout.read(1).decode('utf-8')
             if line == "" and handle.poll() != None:
                 break
             if line != "":

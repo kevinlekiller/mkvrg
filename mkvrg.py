@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+"""Calculate Replaygain for all audio tracks in Matroska files and write the
+appropriate track tags to said files"""
 
 from __future__ import print_function
 import sys

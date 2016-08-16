@@ -17,7 +17,7 @@ except ImportError:
 from argparse import ArgumentParser
 
 
-def main(argv):
+def main():
     utils = Utils()
     if not utils.files:
         utils.print_message("No files found to process.", utils.MNOTICE)
@@ -388,4 +388,4 @@ class Mkvrg:
         return True
 
 if __name__ == '__main__':
-    main(sys.argv)
+    main()

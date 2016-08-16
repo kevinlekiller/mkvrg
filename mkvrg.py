@@ -55,8 +55,8 @@ class ThreadMkvrg:
         if total_work < self.max_threads:
             self.max_threads = total_work
         self.queue = queue()
-        self.set_work()
         self.create_workers()
+        self.set_work()
         #self.queue.join()
         while not self.queue.empty():
             try:
@@ -409,10 +409,11 @@ class Mkvrg:
             return False
         lines = ""
         while True:
-            line = handle.stdout.read(1).decode('utf-8')
+            line = handle.stdout.read(1)
             if line == "" and handle.poll() != None:
                 break
             if line != "":
+                line = line.decode('utf-8')
                 lines = lines + line
                 if self.utils.verbosity != self.utils.VERBOSITY_SILENT:
                     sys.stdout.write(line)

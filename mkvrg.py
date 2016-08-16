@@ -57,7 +57,6 @@ class ThreadMkvrg:
         self.queue = queue()
         self.create_workers()
         self.set_work()
-        #self.queue.join()
         while not self.queue.empty():
             try:
                 time.sleep(1)
@@ -65,7 +64,8 @@ class ThreadMkvrg:
                 print("")
                 utils.print_message("Cleaning up temp files.")
                 utils.cleanup_tmp()
-                break
+                return
+        self.queue.join()
 
     def create_workers(self):
         for i in range(self.max_threads):
@@ -411,7 +411,7 @@ class Mkvrg:
         lines = ""
         while True:
             line = handle.stdout.read(1)
-            if line == "" and handle.poll() != None:
+            if not line and handle.poll() != None:
                 break
             if line != "":
                 line = line.decode('utf-8')

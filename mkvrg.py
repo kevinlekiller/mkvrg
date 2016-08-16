@@ -120,7 +120,8 @@ class Utils():
 
     def __check_file(self, path):
         magic, encoding = mimetypes.guess_type(path)
-        if "matroska" not in magic.lower():
+        # We need to catch if mimetypes could not guess
+        if not magic or "matroska" not in magic.lower():
             self.print_message("File does not seem to contain Matroska data.", self.MERROR)
             return
         if self.minsize > 0 and os.path.getsize(path) < self.minsize:

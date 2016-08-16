@@ -159,8 +159,7 @@ while read file; do
         
         echo "INFO: Applying gain ($TRACKGAIN) / true peak ($TRACKPEAK) / range ($TRACKRANGE) for track $track on file '$file'."
 
-	# because the order is the same in mkvpropedit but numbering starts at 1
-	mkvpropedit --tags track:$((++track)):"$TMPFILE" "$file"
+        mkvpropedit --tags track:"$((track++))":"$TMPFILE" "$file"
         
         if [[ $VERIFY == true ]] && [[ ! $(mediainfo "$file") =~ "ITU-R BS.1770" ]]; then
             echo -e "\e[93mWARNING: Replaygain has not been applied for track $track on file '$file'.\e[0m"

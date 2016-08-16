@@ -26,10 +26,26 @@ except ImportError:
 from argparse import ArgumentParser
 
 
+# create logger
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+# create console handler and set level to debug
+ch = logging.StreamHandler()
+ch.setLevel(logging.DEBUG)
+
+# create formatter
+formatter = logging.Formatter('(%(name)s)|%(levelname)s: %(message)s')
+ch.setFormatter(formatter)
+
+# add ch to logger
+logger.addHandler(ch)
+
+
 def main():
     utils = Utils()
     if not utils.files:
-        logging.warning("No files found to process.")
+        logger.warning("No files found to process.")
     try:
         ThreadMkvrg(utils)
     except KeyboardInterrupt:
@@ -93,6 +109,7 @@ class Utils:
     def __init__(self):
         self.opt_exit = ""
         self.verbosity = self.exit = self.minsize = self.verbosity = self.threads = 0
+        self.loglevel = "INFO"
         self.sample_peak = self.default_track = self.exit = self.force = self.verify = False
         args = self.__parse_args()
         self.__check_binaries()
@@ -161,7 +178,7 @@ class Utils:
             self.print_message("Skipping replaygain tags check, --force is on.")
             return True
         if "ITU-R BS.1770" in self.run_command("mediainfo " + path +
-                                                         ' --Inform="Audio;%REPLAYGAIN_ALGORITHM%"'):
+                                               ' --Inform="Audio;%REPLAYGAIN_ALGORITHM%"'):
             self.print_message("Replaygain tags found in file.")
             if first_check:
                 return False
@@ -223,7 +240,7 @@ class Utils:
         """Parse command line arguments."""
         parser = ArgumentParser()
         parser.add_argument("-s", "--samplepeak", help="Use the sample peak option instead of true" +
-                                                       " peak for bs1770gain, this is much faster.",
+                            " peak for bs1770gain, this is much faster.",
                             action="store_true")
         parser.add_argument("-t", "--threads", type=int, help="Amount of threads to use to process files.", default=1)
         parser.add_argument("-d", "--default", help="Only process the default audio track?", action="store_true")
@@ -267,7 +284,7 @@ class Utils:
 
         self.verbosity = args.verbosity
         if not args.paths:
-            self.print_message("No path(s) given, processing current working directory recursively.", self.MINFO)
+            logger.info("No path(s) given, processing current working directory recursively.")
             return ["."]
         return args.paths
 
@@ -449,7 +466,7 @@ class Mkvrg:
             return False
 
         self.utils.print_message("Found replaygain info (integrated: " + self.rg_integrated +
-                       ") (range: " + self.rg_range + ") (truepeak: " + self.rg_peak + ")", self.utils.MDEBUG)
+                                 ") (range: " + self.rg_range + ") (truepeak: " + self.rg_peak + ")", self.utils.MDEBUG)
         return True
 
     def __write_xml_file(self):
@@ -468,7 +485,7 @@ class Mkvrg:
         """Apply replaygain tags with mkvpropedit."""
         self.utils.print_message("Applying tags with mkvpropedit for track id " + trackid, self.utils.MDEBUG)
         if not self.utils.run_command("mkvpropedit --tags track:" + str(int(trackid) + 1) + ":" + self.tmp_file + " " +
-                                          self.cur_path):
+                                      self.cur_path):
             self.utils.print_message("Problem applying replaygain tags to " + self.cur_path, self.utils.MERROR)
             return False
         return True

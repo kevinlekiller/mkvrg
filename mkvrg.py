@@ -386,31 +386,15 @@ class Mkvrg:
         self.utils.check_tags(False)
 
     def __get_bs1770gain_info(self, trackid):
-        handle = subprocess.Popen("bs1770gain --audio " + trackid + " -r " +
-                                  ("-p " if self.utils.sample_peak else "-t ") +
-                                  self.cur_path, stdout=subprocess.PIPE, shell=True)
-        if not handle:
+        buffer = StringIO(self.utils.run_command("bs1770gain --audio " + trackid + " -r " +
+                                              ("-p " if self.utils.sample_peak else "-t ") + self.cur_path
+                                              , subprocess.STDOUT, universal_newlines=True))
+        if not buffer:
             self.utils.log.error(self.thread + "Problem running bs1770gain.")
             return False
-        lines = ""
-        while True:
-            line = handle.stdout.read(1)
-            if not line and handle.poll() != None:
-                break
-            if line != "":
-                line = line.decode('utf-8')
-                lines = lines + line
-                """Commented to hide output of bs1770gain analyze.
-                if self.utils.verbosity != self.utils.VERBOSITY_SILENT:
-                    sys.stdout.write(line)"""
 
-                sys.stdout.flush()
-        lines = StringIO(lines)
-        if not lines:
-            self.utils.log.error(self.thread + "Problem parsing bs1770gain output.")
-            return False
         self.rg_integrated = self.rg_range = self.rg_peak = ""
-        for line in lines:
+        for line in buffer:
             if "ALBUM" in line:
                 break
             elif "integrated" in line and self.rg_integrated == "":

@@ -131,6 +131,7 @@ class Utils:
                 try:
                     os.close(handle)
                 except OSError:
+                    # FIXME
                     pass
 
     def print_message(self, message, mtype=MINFO):

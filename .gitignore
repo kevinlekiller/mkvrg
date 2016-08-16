@@ -3,3 +3,7 @@ test.*
 *.mkv
 *.mka
 *.mk3d
+*~
+*.sw[mno]
+*.patch
+.ropeproject/

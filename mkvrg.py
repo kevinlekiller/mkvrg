@@ -23,7 +23,6 @@ from argparse import ArgumentParser
 
 
 def main():
-    logging.basicConfig()
     log = Log()
     utils = Utils()
     utils.log = log
@@ -41,8 +40,7 @@ def process_thread(thread, queue, utils):
         if not work:
             queue.task_done()
             return
-        utils.log.info("Thread " + str(thread) + " working on file: " + str(work))
-        mkvrg = Mkvrg(utils)
+        mkvrg = Mkvrg(utils, thread)
         mkvrg.process_file(work)
         queue.task_done()
 
@@ -52,33 +50,34 @@ class Log:
         """"""
         self.logger = logging.getLogger(name)
         self.logger.setLevel(verbosity)
-        #self.ch = logging.StreamHandler()
-        #self.ch.setLevel(logging.DEBUG)
-        #self.ch.setFormatter(logging.Formatter('(%(name)s)|%(levelname)s: %(message)s'))
-        #self.logger.addHandler(self.ch)
+        if not len(self.logger.handlers):
+            handler = logging.StreamHandler()
+            handler.setFormatter(logging.Formatter('%(name)s [%(levelname)s]:\t%(message)s'))
+            handler.setLevel(verbosity)
+            self.logger.addHandler(handler)
         self.exit = False
 
     def set_verbosity(self, verbosity):
         self.logger.setLevel(verbosity)
 
-    def log(self, level, *message):
+    def log(self, level, message):
         self.logger.log(message)
 
-    def critical(self, *message):
+    def critical(self, message):
         self.logger.critical(message)
         self.__do_exit()
 
-    def debug(self, *message):
+    def debug(self, message):
         self.logger.debug(message)
 
-    def error(self, *message):
+    def error(self, message):
         self.logger.error(message)
         self.__do_exit()
 
-    def info(self, *message):
+    def info(self, message):
         self.logger.info(message)
 
-    def warning(self, *message):
+    def warning(self, message):
         self.logger.warning(message)
 
     def __do_exit(self, code = 1):
@@ -335,8 +334,9 @@ class XmlUtils:
 
 
 class Mkvrg:
-    def __init__(self, utils):
+    def __init__(self, utils, thread=0):
         self.utils = utils
+        self.thread = "Thread " + str(thread) + ":\t"
         self.xml_utils = XmlUtils(self.utils.ref_loudness)
         self.track_count = 0
         self.track = {}
@@ -347,12 +347,12 @@ class Mkvrg:
     def process_file(self, path):
         """Process a matroska file, analyzing it with bs1770gain and applying tags."""
         self.cur_path = path
-        self.utils.log.info("Processing file: " + self.cur_path)
+        self.utils.log.info(self.thread + "Processing file: " + self.cur_path)
         if not self.utils.check_tags(self.cur_path):
             return
         self.__get_tracks()
         self.__process_tracks()
-        self.utils.log.info("Finished processing file " + self.cur_path)
+        self.utils.log.info(self.thread + "Finished processing file " + self.cur_path)
 
     def __get_tracks(self):
         """Get audio track numbers from bs1770gain"""
@@ -364,17 +364,18 @@ class Mkvrg:
             if "Audio" in line and "Stream" in line:
                 i += 1
                 if self.utils.default_track == True and "default" not in line:
-                    self.utils.log.info("Skipping non default audio track " + str(i) + ", you enabled --default")
+                    self.utils.log.info(self.thread + "Skipping non default audio track " + str(i) +
+                                        ", you enabled --default")
                     continue
                 matches = self.utils.track_list_regex.search(line)
                 if not matches:
-                    self.utils.log.warning("Problem finding track number for track " + str(i))
+                    self.utils.log.warning(self.thread + "Problem finding track number for track " + str(i))
                     continue
                 self.tracks[i] = matches.group(1)
 
     def __process_tracks(self):
         if not self.tracks:
-            self.utils.log.error("No audio tracks found in the file.")
+            self.utils.log.error(self.thread + "No audio tracks found in the file.")
             return False
         for tracknum, trackid in self.tracks.items():
             if not self.__get_bs1770gain_info(trackid):
@@ -389,7 +390,7 @@ class Mkvrg:
                                   ("-p " if self.utils.sample_peak else "-t ") +
                                   self.cur_path, stdout=subprocess.PIPE, shell=True)
         if not handle:
-            self.utils.log.error("Problem running bs1770gain.")
+            self.utils.log.error(self.thread + "Problem running bs1770gain.")
             return False
         lines = ""
         while True:
@@ -406,7 +407,7 @@ class Mkvrg:
                 sys.stdout.flush()
         lines = StringIO(lines)
         if not lines:
-            self.utils.log.error("Problem parsing bs1770gain output.")
+            self.utils.log.error(self.thread + "Problem parsing bs1770gain output.")
             return False
         self.rg_integrated = self.rg_range = self.rg_peak = ""
         for line in lines:
@@ -428,7 +429,7 @@ class Mkvrg:
                     break
                 self.rg_peak = matches.group(1)
         if not self.rg_integrated or not self.rg_peak or not self.rg_range:
-            self.utils.log.error("Could not find replaygain info from bs1770gain.")
+            self.utils.log.error(self.thread + "Could not find replaygain info from bs1770gain.")
             return False
 
         return True
@@ -440,7 +441,7 @@ class Mkvrg:
         self.xml_utils.set_rg_tags(self.rg_integrated, self.rg_range, self.rg_peak)
         self.xml_utils.write_rg_xml(self.tmp_file)
         if os.path.getsize(self.tmp_file) == 0:
-            self.utils.log.error("Could not write XML to temp file.")
+            self.utils.log.error(self.thread + "Could not write XML to temp file.")
             return False
         return True
 
@@ -448,7 +449,7 @@ class Mkvrg:
         """Apply replaygain tags with mkvpropedit."""
         if not self.utils.run_command("mkvpropedit --tags track:" + str(int(trackid) + 1) + ":" + self.tmp_file + " " +
                                       self.cur_path):
-            self.utils.log.error("Problem applying replaygain tags to " + self.cur_path)
+            self.utils.log.error(self.thread + "Problem applying replaygain tags to " + self.cur_path)
             return False
         return True
 

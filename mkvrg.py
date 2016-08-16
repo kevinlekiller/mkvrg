@@ -39,6 +39,7 @@ def main():
 
 
 def process_thread(thread, pool, utils):
+    while True:
         mkvrg = Mkvrg(utils)
         work = pool.get()
         mkvrg.process_file(work)
@@ -54,8 +55,9 @@ class ThreadMkvrg:
         if total_work < self.max_threads:
             self.max_threads = total_work
         self.queue = queue()
-        self.create_workers()
         self.set_work()
+        self.create_workers()
+        #self.queue.join()
         while not self.queue.empty():
             try:
                 time.sleep(1)
@@ -72,8 +74,8 @@ class ThreadMkvrg:
             worker.start()
 
     def set_work(self):
-        for file in self.utils.files:
-            self.queue.put(file)
+        for path in self.utils.files:
+            self.queue.put(path)
 
 
 class Utils:

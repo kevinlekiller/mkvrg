@@ -23,8 +23,8 @@ def main():
         utils.print_message("No files found to process.", utils.MNOTICE)
     xml_utils = XmlUtils(utils)
     mkvrg = Mkvrg(xml_utils)
-    for file in utils.files:
-        mkvrg.process_file(file)
+    for cur_file in utils.files:
+        mkvrg.process_file(cur_file)
     return 0
 
 

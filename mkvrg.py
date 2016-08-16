@@ -49,7 +49,8 @@ class Utils():
         self.__check_binaries()
         self.ref_loudness = self.__get_ref_loudness()
         if self.ref_loudness == "":
-            self.print_message("Could not find reference replaygain loudness from bs1770gain.", self.MERROR)
+            self.print_message("Could not find reference replaygain loudness
+                               from bs1770gain.", self.MERROR)
             exit(1)
 
         self.track_list_regex = re.compile("Stream\s*#\d+:(\d+).+?Audio")

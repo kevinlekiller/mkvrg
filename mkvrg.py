@@ -131,7 +131,7 @@ class Utils:
                 try:
                     os.close(handle)
                 except OSError:
-                    ""
+                    pass
 
     def print_message(self, message, mtype=MINFO):
         """Print message with colors, appends type of message."""

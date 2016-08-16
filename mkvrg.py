@@ -3,14 +3,12 @@
 appropriate track tags to said files"""
 
 from __future__ import print_function
-import sys
 import os
 import fnmatch
 import subprocess
 import shlex
 import re
 import tempfile
-import mimetypes
 import multiprocessing
 import itertools
 import logging
@@ -196,17 +194,15 @@ class CheckArgs:
 
     def __check_binaries(self):
         """Check if all required binaries are in PATH."""
-        binaries = ["bs1770gain", "mkvpropedit"]
+        binaries = ["bs1770gain", "mkvpropedit", "mkvinfo"]
         for binary in binaries:
             if not self.__check_binary(binary):
                 print("ERROR: The program '" + binary + "' is required.")
                 exit(1)
 
     def __check_file(self, path):
-        magic, encoding = mimetypes.guess_type(path)
-        # We need to catch if mimetypes could not guess
         self.utils.log.info("Checking file (" + path + ").")
-        if not magic or "matroska" not in magic.lower():
+        if not self.utils.run_command("mkvinfo " + path):
             self.utils.log.error("File does not seem to contain Matroska data.")
             return
         if self.utils.minsize > 0 and os.path.getsize(path) < self.utils.minsize:

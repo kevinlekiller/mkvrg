@@ -29,7 +29,7 @@ def main():
     return 0
 
 
-class Utils():
+class Utils:
     MDEBUG = 4
     MERROR = 3
     MWARNING = 2
@@ -236,8 +236,9 @@ class MakeTmpFile:
 
 class XmlUtils:
     def __init__(self, ref_loudness):
-        self.ref_loudness = ref_loudness
         """"""
+        self.ref_loudness = ref_loudness
+        self.tags = self.tag = None
 
     def set_rg_head(self):
         self.tags = xml.Element("Tags")
@@ -251,7 +252,7 @@ class XmlUtils:
         xml.SubElement(simple, "String").text = self.ref_loudness
 
     def set_rg_tags(self, rg_integrated, rg_range, rg_peak):
-        if self.tags == None or self.tag != None:
+        if self.tags is None or self.tag is not None:
             self.set_rg_head()
         simple = xml.SubElement(self.tag, "Simple")
         xml.SubElement(simple, "Name").text = "REPLAYGAIN_TRACK_GAIN"
@@ -264,7 +265,7 @@ class XmlUtils:
         xml.SubElement(simple, "String").text = rg_peak
 
     def write_rg_xml(self, path):
-        if self.tag == None or self.tags == None:
+        if self.tag is None or self.tags is None:
             return
         xml.ElementTree(self.tags).write(path)
         self.tag = self.tags = None

@@ -205,11 +205,14 @@ class CheckArgs:
     def __check_file(self, path):
         magic, encoding = mimetypes.guess_type(path)
         # We need to catch if mimetypes could not guess
+        self.utils.log.info("Checking file (" + path + ").")
         if not magic or "matroska" not in magic.lower():
             self.utils.log.error("File does not seem to contain Matroska data.")
             return
         if self.utils.minsize > 0 and os.path.getsize(path) < self.utils.minsize:
             self.utils.log.info("The file is smaller than your --minsize setting, skipping.")
+            return
+        if not self.utils.check_tags(path):
             return
         self.utils.files.extend([path])
 
@@ -246,22 +249,22 @@ class Utils:
 
     def check_tags(self, path, first_check=True):
         """Check if matroska file has replaygain tags."""
-        if self.verify == False:
+        if not self.verify:
             return True
-        if first_check == True and self.force == True:
+        if first_check and self.force:
             self.log.info("Skipping replaygain tags check, --force is on.")
             return True
         if "ITU-R BS.1770" in self.run_command("mediainfo " + path +
                                                ' --Inform="Audio;%REPLAYGAIN_ALGORITHM%"'):
-            self.log.info("Replaygain tags found in file.")
             if first_check:
+                self.log.info("Replaygain tags found in file (" + path + "), skipping.")
                 return False
             return True
-        if first_check == True:
-            self.log.info("No replaygain tags found in file.")
+        if first_check:
+            self.log.info("No replaygain tags found in file (" + path + ") continuing.")
             return True
 
-        self.log.error("No replaygain tags found in file.")
+        self.log.error("No replaygain tags were found in file (" + path + ") after applying with mkvpropedit.")
         return False
 
     def run_command(self, command, stderr=None, universal_newlines=False):
@@ -348,8 +351,6 @@ class Mkvrg:
         """Process a matroska file, analyzing it with bs1770gain and applying tags."""
         self.cur_path = path
         self.utils.log.info(self.thread + "Processing file: " + self.cur_path)
-        if not self.utils.check_tags(self.cur_path):
-            return
         self.__get_tracks()
         self.__process_tracks()
         self.utils.log.info(self.thread + "Finished processing file " + self.cur_path)
@@ -365,17 +366,18 @@ class Mkvrg:
                 i += 1
                 if self.utils.default_track == True and "default" not in line:
                     self.utils.log.info(self.thread + "Skipping non default audio track " + str(i) +
-                                        ", you enabled --default")
+                                        ", you enabled --default (" + self.cur_path + ")")
                     continue
                 matches = self.utils.track_list_regex.search(line)
                 if not matches:
-                    self.utils.log.warning(self.thread + "Problem finding track number for track " + str(i))
+                    self.utils.log.warning(self.thread + "Problem finding track number for track " + str(i) +
+                                           " (" + self.cur_path + ")")
                     continue
                 self.tracks[i] = matches.group(1)
 
     def __process_tracks(self):
         if not self.tracks:
-            self.utils.log.error(self.thread + "No audio tracks found in the file.")
+            self.utils.log.error(self.thread + "No audio tracks found in file (" + self.cur_path + ")")
             return False
         for tracknum, trackid in self.tracks.items():
             if not self.__get_bs1770gain_info(trackid):
@@ -383,14 +385,14 @@ class Mkvrg:
             if not self.__write_xml_file():
                 continue
             self.__apply_tags(trackid)
-        self.utils.check_tags(False)
+        self.utils.check_tags(self.cur_path, False)
 
     def __get_bs1770gain_info(self, trackid):
         buffer = StringIO(self.utils.run_command("bs1770gain --audio " + trackid + " -r " +
                                               ("-p " if self.utils.sample_peak else "-t ") + self.cur_path
                                               , subprocess.STDOUT, universal_newlines=True))
         if not buffer:
-            self.utils.log.error(self.thread + "Problem running bs1770gain.")
+            self.utils.log.error(self.thread + "Problem running bs1770gain. (" + self.cur_path + ")")
             return False
 
         self.rg_integrated = self.rg_range = self.rg_peak = ""
@@ -413,7 +415,8 @@ class Mkvrg:
                     break
                 self.rg_peak = matches.group(1)
         if not self.rg_integrated or not self.rg_peak or not self.rg_range:
-            self.utils.log.error(self.thread + "Could not find replaygain info from bs1770gain.")
+            self.utils.log.error(self.thread + "Could not find replaygain info from bs1770gain. (" +
+                                 self.cur_path + ")")
             return False
 
         return True
@@ -425,7 +428,7 @@ class Mkvrg:
         self.xml_utils.set_rg_tags(self.rg_integrated, self.rg_range, self.rg_peak)
         self.xml_utils.write_rg_xml(self.tmp_file)
         if os.path.getsize(self.tmp_file) == 0:
-            self.utils.log.error(self.thread + "Could not write XML to temp file.")
+            self.utils.log.error(self.thread + "Could not write XML to temp file (" + self.cur_path + ")")
             return False
         return True
 

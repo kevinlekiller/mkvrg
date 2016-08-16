@@ -23,8 +23,7 @@ def main():
     utils = Utils()
     if not utils.files:
         utils.print_message("No files found to process.", utils.MNOTICE)
-    xml_utils = XmlUtils(utils)
-    mkvrg = Mkvrg(xml_utils)
+    mkvrg = Mkvrg(utils)
     for cur_file in utils.files:
         mkvrg.process_file(cur_file)
     return 0
@@ -236,8 +235,9 @@ class MakeTmpFile:
 
 
 class XmlUtils:
-    def __init__(self, utils):
-        self.utils = utils
+    def __init__(self, ref_loudness):
+        self.ref_loudness = ref_loudness
+        """"""
 
     def set_rg_head(self):
         self.tags = xml.Element("Tags")
@@ -248,7 +248,7 @@ class XmlUtils:
         xml.SubElement(simple, "String").text = "ITU-R BS.1770"
         simple = xml.SubElement(self.tag, "Simple")
         xml.SubElement(simple, "Name").text = "REPLAYGAIN_REFERENCE_LOUDNESS"
-        xml.SubElement(simple, "String").text = self.utils.ref_loudness
+        xml.SubElement(simple, "String").text = self.ref_loudness
 
     def set_rg_tags(self, rg_integrated, rg_range, rg_peak):
         if self.tags == None or self.tag != None:
@@ -271,9 +271,9 @@ class XmlUtils:
 
 
 class Mkvrg:
-    def __init__(self,xml_utils):
-        self.xml_utils = xml_utils
-        self.utils = self.xml_utils.utils
+    def __init__(self, utils):
+        self.utils = utils
+        self.xml_utils = XmlUtils(self.utils.ref_loudness)
         self.track_count = 0
         self.track = {}
         self.cur_path = self.rg_integrated = self.rg_range = self.rg_peak = ""
@@ -292,7 +292,8 @@ class Mkvrg:
     def __get_tracks(self):
         self.utils.print_message("Getting tracks list.", self.utils.MDEBUG)
         """Get audio track numbers from bs1770gain"""
-        buf = StringIO(self.utils.run_command("bs1770gain -l " + self.cur_path, subprocess.STDOUT, universal_newlines=True))
+        buf = StringIO(self.utils.run_command("bs1770gain -l " + self.cur_path, subprocess.STDOUT,
+                                              universal_newlines=True))
         self.tracks = {}
         i = 0
         for line in buf:
@@ -313,7 +314,8 @@ class Mkvrg:
             self.utils.print_message("No audio tracks found in the file.", self.utils.MERROR)
             return False
         for tracknum, trackid in self.tracks.items():
-            self.utils.print_message("Found track number: " + str(tracknum) + ", track id: " + trackid, self.utils.MDEBUG)
+            self.utils.print_message("Found track number: " + str(tracknum) + ", track id: " + trackid,
+                                     self.utils.MDEBUG)
             if not self.__get_bs1770gain_info(trackid):
                 continue
             if not self.__write_xml_file():
@@ -323,7 +325,8 @@ class Mkvrg:
 
     def __get_bs1770gain_info(self, trackid):
         self.utils.print_message("Getting replaygain info for track id " + trackid, self.utils.MDEBUG)
-        handle = subprocess.Popen("bs1770gain --audio " + trackid + " -r " + ("-p " if self.utils.sample_peak else "-t ") +
+        handle = subprocess.Popen("bs1770gain --audio " + trackid + " -r " +
+                                  ("-p " if self.utils.sample_peak else "-t ") +
                                   self.cur_path, stdout=subprocess.PIPE, shell=True)
         if not handle:
             self.utils.print_message("Problem running bs1770gain.", self.utils.print_message)

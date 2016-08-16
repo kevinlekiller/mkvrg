@@ -53,10 +53,10 @@ class Utils():
                                self.MERROR)
             exit(1)
 
-        self.track_list_regex = re.compile("Stream\s*#\d+:(\d+).+?Audio")
-        self.rg_integrated_regex = re.compile("([-\d.]+\s*LU)\s*$")
-        self.rg_range_regex = re.compile("([-\d.]+\s*LUFS)\s*$")
-        self.rg_peak_regex = re.compile("([-\d.]+)\s*$")
+        self.track_list_regex = re.compile(r"Stream\s*#\d+:(\d+).+?Audio")
+        self.rg_integrated_regex = re.compile(r"([-\d.]+\s*LU)\s*$")
+        self.rg_range_regex = re.compile(r"([-\d.]+\s*LUFS)\s*$")
+        self.rg_peak_regex = re.compile(r"([-\d.]+)\s*$")
         self.files = []
         path = os.path
         for arg in args:

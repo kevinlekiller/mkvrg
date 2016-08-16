@@ -11,7 +11,12 @@ import shlex
 import re
 import tempfile
 import mimetypes
+import threading
 import xml.etree.cElementTree as xml
+try:
+    from queue import queue as queue
+except ImportError:
+    from Queue import Queue as queue
 try:
     from StringIO import StringIO
 except ImportError:
@@ -23,10 +28,40 @@ def main():
     utils = Utils()
     if not utils.files:
         utils.print_message("No files found to process.", utils.MNOTICE)
-    mkvrg = Mkvrg(utils)
-    for cur_file in utils.files:
-        mkvrg.process_file(cur_file)
+    ThreadMkvrg(utils)
     return 0
+
+
+def process_thread(thread, pool, utils):
+    while True:
+        mkvrg = Mkvrg(utils)
+        work = pool.get()
+        mkvrg.process_file(work)
+        pool.task_done()
+
+
+class ThreadMkvrg:
+    def __init__(self, utils):
+        """"""
+        self.utils = utils
+        self.max_threads = self.utils.threads
+        total_work = len(self.utils.files)
+        if total_work < self.max_threads:
+            self.max_threads = total_work
+        self.queue = queue()
+        self.create_workers()
+        self.set_work()
+        self.queue.join()
+
+    def create_workers(self):
+        for i in range(self.max_threads):
+            worker = threading.Thread(target=process_thread, args=(i, self.queue, self.utils))
+            worker.daemon = True
+            worker.start()
+
+    def set_work(self):
+        for file in self.utils.files:
+            self.queue.put(file)
 
 
 class Utils:
@@ -42,7 +77,7 @@ class Utils:
 
     def __init__(self):
         self.opt_exit = ""
-        self.verbosity = self.exit = self.minsize = self.verbosity = 0
+        self.verbosity = self.exit = self.minsize = self.verbosity = self.threads = 0
         self.sample_peak = self.default_track = self.exit = self.force = self.verify = False
         args = self.__parse_args()
         self.__check_binaries()
@@ -157,6 +192,7 @@ class Utils:
         parser.add_argument("-s", "--samplepeak", help="Use the sample peak option instead of true" +
                                                        " peak for bs1770gain, this is much faster.",
                             action="store_true")
+        parser.add_argument("-t", "--threads", type=int, help="Amount of threads to use to process files.", default=1)
         parser.add_argument("-d", "--default", help="Only process the default audio track?", action="store_true")
         parser.add_argument("-m", "--minsize", type=int, help="Minimum size of matroska file in bytes.", default=0)
         parser.add_argument("-c", "--verify",
@@ -176,6 +212,13 @@ class Utils:
         self.default_track = args.default
         self.exit = args.exit
         self.force = args.force
+
+        self.threads = args.threads
+        if self.threads < 1:
+            self.print_message("The --threads must be at least 1", self.MERROR)
+            self.print_message("Setting --threads to 1", self.MNOTICE)
+            self.threads = 1
+
         self.minsize = args.minsize
         if self.minsize < 0:
             self.print_message("The --minsize value must be a positive number.", self.MERROR)

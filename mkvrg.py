@@ -19,6 +19,18 @@ except ImportError:
     from io import StringIO
 from argparse import ArgumentParser
 
+LOGLEVELS = {
+    "all": 0,
+    "debug": 10,
+    "info": 20,
+    "warning": 30,
+    "error": 40,
+    "critcial": 50,
+    "silent": 99
+}
+# sort, so we get descending order of loglevels, just for the argparser choices
+LOGLEVEL_NAMES = sorted(LOGLEVELS.keys(), key=LOGLEVELS.get, reverse=True)
+
 
 def main():
     log = Log()
@@ -155,16 +167,16 @@ class CheckArgs:
             "-e", "--exit", help="Stop and exit if any problems are encountered.",
             action="store_true")
         parser.add_argument(
-            "-v", "--verbosity", type=int,
+            "-v", "--verbosity", type=str,
             help="Level of verbosity. (20 = info (default), 99 = silent, 10 = debug, " +
             "30 = warning, 40 = error, 50 = critical, 0 = all).", default=20,
-            choices=[20, 99, 10, 30, 40, 50, 0])
+            choices=LOGLEVEL_NAMES)
         parser.add_argument(
             "paths",
             help="Path(s) to folder(s) or file(s) to scan matroska files for replaygain info.",
             nargs="*")
         args = parser.parse_args()
-        self.utils.verbosity = args.verbosity
+        self.utils.verbosity = LOGLEVELS[args.verbosity]
         self.utils.sample_peak = args.samplepeak
         self.utils.default_track = args.default
         self.utils.exit = args.exit

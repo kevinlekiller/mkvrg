@@ -171,8 +171,10 @@ class CheckArgs:
         self.utils.force = args.force
 
         self.utils.threads = args.threads
-        if self.utils.threads < 1:
-            self.utils.log.error("The --threads must be at least 1")
+        if self.utils.threads == 0:
+            self.utils.threads = multiprocessing.cpu_count()
+        if self.utils.threads < 0:
+            self.utils.log.error("The --threads must be at least 0")
             self.utils.log.error("Setting --threads to 1")
             self.utils.threads = 1
 

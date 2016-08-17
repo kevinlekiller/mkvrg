@@ -7,3 +7,4 @@ test*
 *.sw[mno]
 *.patch
 .ropeproject/
+*.swp

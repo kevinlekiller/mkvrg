@@ -91,8 +91,10 @@ class ThreadMkvrg:
         if total_work < threads:
             threads = total_work
 
+        # pylint: disable=E1101
         manager = multiprocessing.Manager()
         queue = manager.Queue(threads)
+        # pylint: enable=E1101
 
         processes = []
         for i in range(threads):

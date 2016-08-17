@@ -285,9 +285,9 @@ class Utils:
             ret = str(subprocess.check_output(shlex.split(command), stderr=stderr,
                                               universal_newlines=universal_newlines))
         except subprocess.CalledProcessError:
-            ""
+            pass
         except OSError:
-            ""
+            pass
         return ret
 
 

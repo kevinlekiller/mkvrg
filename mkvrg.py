@@ -56,19 +56,19 @@ def process_thread(thread, queue, utils):
 
 
 class Log:
-    def __init__(self, verbosity=20, name="mkvrg"):
+    def __init__(self, loglevel=20, name="mkvrg"):
         """"""
         self.logger = logging.getLogger(name)
-        self.logger.setLevel(verbosity)
+        self.logger.setLevel(loglevel)
         if not len(self.logger.handlers):
             handler = logging.StreamHandler()
             handler.setFormatter(logging.Formatter('%(name)s [%(levelname)s]:\t%(message)s'))
-            handler.setLevel(verbosity)
+            handler.setLevel(loglevel)
             self.logger.addHandler(handler)
         self.exit = False
 
-    def set_verbosity(self, verbosity):
-        self.logger.setLevel(verbosity)
+    def set_level(self, loglevel):
+        self.logger.setLevel(loglevel)
 
     def log(self, message):
         self.logger.log(message)
@@ -127,7 +127,7 @@ class CheckArgs:
         self.__check_binaries()
         args = self.__parse_args()
         self.utils.log.exit = self.utils.exit
-        self.utils.log.set_verbosity(self.utils.verbosity)
+        self.utils.log.set_level(self.utils.loglevel)
         self.utils.ref_loudness = self.__get_ref_loudness()
         if self.utils.ref_loudness == "":
             self.utils.log("Could not find reference replaygain loudness from bs1770gain.")
@@ -167,8 +167,8 @@ class CheckArgs:
             "-e", "--exit", help="Stop and exit if any problems are encountered.",
             action="store_true")
         parser.add_argument(
-            "-v", "--verbosity", type=str,
-            help="Level of verbosity. (20 = info (default), 99 = silent, 10 = debug, " +
+            "-v", "--loglevel", type=str,
+            help="Level of loglevel. (20 = info (default), 99 = silent, 10 = debug, " +
             "30 = warning, 40 = error, 50 = critical, 0 = all).", default="info",
             choices=LOGLEVEL_NAMES)
         parser.add_argument(
@@ -176,7 +176,7 @@ class CheckArgs:
             help="Path(s) to folder(s) or file(s) to scan matroska files for replaygain info.",
             nargs="*")
         args = parser.parse_args()
-        self.utils.verbosity = LOGLEVELS[args.verbosity]
+        self.utils.loglevel = LOGLEVELS[args.loglevel]
         self.utils.sample_peak = args.samplepeak
         self.utils.default_track = args.default
         self.utils.exit = args.exit

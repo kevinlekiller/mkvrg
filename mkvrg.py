@@ -92,7 +92,7 @@ class ThreadMkvrg:
             threads = total_work
 
         # pylint: disable=E1101
-        queue = multiprocessing.Manager().Queue(threads)
+        queue = multiprocessing.JoinableQueue(threads)
         # pylint: enable=E1101
 
         processes = []

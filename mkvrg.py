@@ -169,7 +169,7 @@ class CheckArgs:
         parser.add_argument(
             "-v", "--verbosity", type=str,
             help="Level of verbosity. (20 = info (default), 99 = silent, 10 = debug, " +
-            "30 = warning, 40 = error, 50 = critical, 0 = all).", default=20,
+            "30 = warning, 40 = error, 50 = critical, 0 = all).", default="info",
             choices=LOGLEVEL_NAMES)
         parser.add_argument(
             "paths",
@@ -261,8 +261,8 @@ class CheckArgs:
 class Utils:
     def __init__(self):
         self.opt_exit = ""
-        self.verbosity = self.exit = self.minsize = self.verbosity = self.threads = 0
-        self.loglevel = "INFO"
+        self.exit = self.minsize = self.threads = 0
+        # self.loglevel = LOGLEVELS["info"]
         self.sample_peak = self.default_track = self.exit = self.force = self.verify = False
         self.track_list_regex = re.compile(r"Stream\s*#\d+:(\d+).+?Audio")
         self.rg_integrated_regex = re.compile(r"([-\d.]+\s*LU)\s*$")

@@ -58,7 +58,7 @@ class Log:
     def set_verbosity(self, verbosity):
         self.logger.setLevel(verbosity)
 
-    def log(self, level, message):
+    def log(self, message):
         self.logger.log(message)
 
     def critical(self, message):

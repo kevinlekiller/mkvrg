@@ -78,7 +78,7 @@ class Log:
     def warning(self, message):
         self.logger.warning(message)
 
-    def __do_exit(self, code = 1):
+    def __do_exit(self, code=1):
         if self.exit:
             print("The --exit option is enabled, exiting.")
             exit(code)
@@ -132,25 +132,36 @@ class CheckArgs:
     def __parse_args(self):
         """Parse command line arguments."""
         parser = ArgumentParser()
-        parser.add_argument("-s", "--samplepeak", help="Use the sample peak option instead of true" +
-                            " peak for bs1770gain, this is much faster.",
-                            action="store_true")
-        parser.add_argument("-t", "--threads", type=int, help="Amount of threads to use to process files.", default=1)
-        parser.add_argument("-d", "--default", help="Only process the default audio track?", action="store_true")
-        parser.add_argument("-m", "--minsize", type=int, help="Minimum size of matroska file in bytes.", default=0)
-        parser.add_argument("-c", "--verify",
-                            help="Verify if matroska file has replaygain tags before and after analyzing.",
-                            action="store_true")
-        parser.add_argument("-f", "--force",
-                            help="Force scanning files for replaygain, even if they already have replaygain tags.",
-                            action="store_true")
-        parser.add_argument("-e", "--exit", help="Stop and exit if any problems are encountered.", action="store_true")
-        parser.add_argument("-v", "--verbosity", type=int,
-                            help="Level of verbosity. (20 = info (default), 99 = silent, 10 = debug, " +
-                                 "30 = warning, 40 = error, 50 = critical, 0 = all).", default=20,
-                            choices=[20, 99, 10, 30, 40, 50, 0])
-        parser.add_argument("paths", help="Path(s) to folder(s) or file(s) to scan matroska files for replaygain info.",
-                            nargs="*")
+        parser.add_argument(
+            "-s", "--samplepeak", help="Use the sample peak option instead of true" +
+            " peak for bs1770gain, this is much faster.", action="store_true")
+        parser.add_argument(
+            "-t", "--threads", type=int, help="Amount of threads to use to process files.",
+            default=1)
+        parser.add_argument(
+            "-d", "--default", help="Only process the default audio track?", action="store_true")
+        parser.add_argument(
+            "-m", "--minsize", type=int, help="Minimum size of matroska file in bytes.", default=0)
+        parser.add_argument(
+            "-c", "--verify",
+            help="Verify if matroska file has replaygain tags before and after analyzing.",
+            action="store_true")
+        parser.add_argument(
+            "-f", "--force",
+            help="Force scanning files for replaygain, even if they already have replaygain tags.",
+            action="store_true")
+        parser.add_argument(
+            "-e", "--exit", help="Stop and exit if any problems are encountered.",
+            action="store_true")
+        parser.add_argument(
+            "-v", "--verbosity", type=int,
+            help="Level of verbosity. (20 = info (default), 99 = silent, 10 = debug, " +
+            "30 = warning, 40 = error, 50 = critical, 0 = all).", default=20,
+            choices=[20, 99, 10, 30, 40, 50, 0])
+        parser.add_argument(
+            "paths",
+            help="Path(s) to folder(s) or file(s) to scan matroska files for replaygain info.",
+            nargs="*")
         args = parser.parse_args()
         self.utils.verbosity = args.verbosity
         self.utils.sample_peak = args.samplepeak
@@ -172,12 +183,14 @@ class CheckArgs:
 
         self.utils.verify = args.verify
         if self.utils.verify and not self.__check_binary("mediainfo"):
-            self.utils.log.error("You enabled the --verify option but you do not have mediainfo installed.")
+            self.utils.log.error(
+                "You enabled the --verify option but you do not have mediainfo installed.")
             self.utils.log.info("Setting --verify to false.")
             self.utils.verify = False
 
         if not args.paths:
-            self.utils.log.info("No path(s) given, processing current working directory recursively.")
+            self.utils.log.info(
+                "No path(s) given, processing current working directory recursively.")
             return ["."]
         return args.paths
 
@@ -187,7 +200,7 @@ class CheckArgs:
         devnull = open(os.devnull, 'w')
         try:
             subprocess.call([binary], stdout=devnull, stderr=devnull)
-        except OSError as e:
+        except OSError:
             result = False
         devnull.close()
         return result
@@ -260,7 +273,9 @@ class Utils:
             self.log.info("No replaygain tags found in file (" + path + ") continuing.")
             return True
 
-        self.log.error("No replaygain tags were found in file (" + path + ") after applying with mkvpropedit.")
+        self.log.error(
+            "No replaygain tags were found in file (" +
+            path + ") after applying with mkvpropedit.")
         return False
 
     def run_command(self, command, stderr=None, universal_newlines=False):
@@ -269,9 +284,9 @@ class Utils:
         try:
             ret = str(subprocess.check_output(shlex.split(command), stderr=stderr,
                                               universal_newlines=universal_newlines))
-        except subprocess.CalledProcessError as e:
+        except subprocess.CalledProcessError:
             ""
-        except OSError as e:
+        except OSError:
             ""
         return ret
 
@@ -360,20 +375,23 @@ class Mkvrg:
         for line in buf:
             if "Audio" in line and "Stream" in line:
                 i += 1
-                if self.utils.default_track == True and "default" not in line:
-                    self.utils.log.info(self.thread + "Skipping non default audio track " + str(i) +
-                                        ", you enabled --default (" + self.cur_path + ")")
+                if self.utils.default_track is True and "default" not in line:
+                    self.utils.log.info(
+                        self.thread + "Skipping non default audio track " + str(i) +
+                        ", you enabled --default (" + self.cur_path + ")")
                     continue
                 matches = self.utils.track_list_regex.search(line)
                 if not matches:
-                    self.utils.log.warning(self.thread + "Problem finding track number for track " + str(i) +
-                                           " (" + self.cur_path + ")")
+                    self.utils.log.warning(
+                        self.thread + "Problem finding track number for track " + str(i) +
+                        " (" + self.cur_path + ")")
                     continue
                 self.tracks[i] = matches.group(1)
 
     def __process_tracks(self):
         if not self.tracks:
-            self.utils.log.error(self.thread + "No audio tracks found in file (" + self.cur_path + ")")
+            self.utils.log.error(
+                self.thread + "No audio tracks found in file (" + self.cur_path + ")")
             return False
         for tracknum, trackid in self.tracks.items():
             if not self.__get_bs1770gain_info(trackid):
@@ -384,11 +402,14 @@ class Mkvrg:
         self.utils.check_tags(self.cur_path, False)
 
     def __get_bs1770gain_info(self, trackid):
-        buffer = StringIO(self.utils.run_command("bs1770gain --audio " + trackid + " -r " +
-                                              ("-p " if self.utils.sample_peak else "-t ") + self.cur_path
-                                              , subprocess.STDOUT, universal_newlines=True))
+        buffer = StringIO(
+            self.utils.run_command(
+                "bs1770gain --audio " + trackid + " -r " +
+                ("-p " if self.utils.sample_peak else "-t ") + self.cur_path,
+                subprocess.STDOUT, universal_newlines=True))
         if not buffer:
-            self.utils.log.error(self.thread + "Problem running bs1770gain. (" + self.cur_path + ")")
+            self.utils.log.error(
+                self.thread + "Problem running bs1770gain. (" + self.cur_path + ")")
             return False
 
         self.rg_integrated = self.rg_range = self.rg_peak = ""
@@ -411,8 +432,9 @@ class Mkvrg:
                     break
                 self.rg_peak = matches.group(1)
         if not self.rg_integrated or not self.rg_peak or not self.rg_range:
-            self.utils.log.error(self.thread + "Could not find replaygain info from bs1770gain. (" +
-                                 self.cur_path + ")")
+            self.utils.log.error(
+                self.thread + "Could not find replaygain info from bs1770gain. (" +
+                self.cur_path + ")")
             return False
 
         return True
@@ -424,15 +446,17 @@ class Mkvrg:
         self.xml_utils.set_rg_tags(self.rg_integrated, self.rg_range, self.rg_peak)
         self.xml_utils.write_rg_xml(self.tmp_file)
         if os.path.getsize(self.tmp_file) == 0:
-            self.utils.log.error(self.thread + "Could not write XML to temp file (" + self.cur_path + ")")
+            self.utils.log.error(
+                self.thread + "Could not write XML to temp file (" + self.cur_path + ")")
             return False
         return True
 
     def __apply_tags(self, trackid):
         """Apply replaygain tags with mkvpropedit."""
-        if not self.utils.run_command("mkvpropedit --tags track:" + str(int(trackid) + 1) + ":" + self.tmp_file + " " +
-                                      self.cur_path):
-            self.utils.log.error(self.thread + "Problem applying replaygain tags to " + self.cur_path)
+        if not self.utils.run_command("mkvpropedit --tags track:" + str(int(trackid) + 1) +
+                                      ":" + self.tmp_file + " " + self.cur_path):
+            self.utils.log.error(
+                self.thread + "Problem applying replaygain tags to " + self.cur_path)
             return False
         return True
 

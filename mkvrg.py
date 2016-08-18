@@ -30,6 +30,7 @@ LOGLEVELS = {
 }
 # sort, so we get descending order of loglevels, just for the argparser choices
 LOGLEVEL_NAMES = sorted(LOGLEVELS.keys(), key=LOGLEVELS.get, reverse=True)
+print(LOGLEVEL_NAMES)
 
 
 def main():
@@ -55,7 +56,7 @@ def process_thread(thread, queue, utils):
         queue.task_done()
 
 
-class Log:
+class Log(object):
     def __init__(self, loglevel=20, name="mkvrg"):
         """"""
         self.logger = logging.getLogger(name)
@@ -96,7 +97,7 @@ class Log:
             exit(code)
 
 
-class ThreadMkvrg:
+class ThreadMkvrg(object):
     def __init__(self, utils):
         threads = utils.threads
         total_work = len(utils.files)
@@ -121,7 +122,7 @@ class ThreadMkvrg:
             process.join()
 
 
-class CheckArgs:
+class CheckArgs(object):
     def __init__(self, utils):
         self.utils = utils
         self.__check_binaries()
@@ -258,7 +259,7 @@ class CheckArgs:
         return buf.group(1)
 
 
-class Utils:
+class Utils(object):
     def __init__(self):
         self.opt_exit = ""
         self.exit = self.minsize = self.threads = 0
@@ -306,7 +307,7 @@ class Utils:
         return ret
 
 
-class MakeTmpFile:
+class MakeTmpFile(object):
     def __init__(self):
         """Create temp file."""
         self.handle, self.path = tempfile.mkstemp()
@@ -325,7 +326,7 @@ class MakeTmpFile:
             os.lseek(self.handle, 0, os.SEEK_SET)
 
 
-class XmlUtils:
+class XmlUtils(object):
     def __init__(self, ref_loudness):
         """"""
         self.ref_loudness = ref_loudness
@@ -362,7 +363,7 @@ class XmlUtils:
         self.tag = self.tags = None
 
 
-class Mkvrg:
+class Mkvrg(object):
     def __init__(self, utils, thread=0):
         self.utils = utils
         self.thread = "Thread " + str(thread) + ":\t"

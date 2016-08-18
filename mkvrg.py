@@ -30,7 +30,6 @@ LOGLEVELS = {
 }
 # sort, so we get descending order of loglevels, just for the argparser choices
 LOGLEVEL_NAMES = sorted(LOGLEVELS.keys(), key=LOGLEVELS.get, reverse=True)
-print(LOGLEVEL_NAMES)
 
 
 def main():

@@ -33,6 +33,7 @@ LOGLEVEL_NAMES = sorted(LOGLEVELS.keys(), key=LOGLEVELS.get, reverse=True)
 
 
 def main():
+    check_binaries()
     log = Log()
     utils = Utils()
     utils.log = log
@@ -53,6 +54,51 @@ def process_thread(thread, queue, utils):
         mkvrg = Mkvrg(utils, thread)
         mkvrg.process_file(work)
         queue.task_done()
+
+
+def check_binary(binary):
+    """Check if a binary is in PATH."""
+    result = True
+    devnull = open(os.devnull, 'w')
+    try:
+        subprocess.call([binary], stdout=devnull, stderr=devnull)
+    except OSError:
+        result = False
+    devnull.close()
+    return result
+
+
+def check_binaries():
+    """Check if all required binaries are in PATH."""
+    binaries = ["bs1770gain", "mkvpropedit", "mkvinfo"]
+    for binary in binaries:
+        if not check_binary(binary):
+            print("ERROR: The program '" + binary + "' is required.")
+            exit(1)
+
+
+def run_command(command, stderr=None, universal_newlines=False):
+    """Run a command in a shell, return the output as a string."""
+    ret = ""
+    try:
+        ret = str(subprocess.check_output(shlex.split(command), stderr=stderr,
+                                          universal_newlines=universal_newlines))
+    except subprocess.CalledProcessError:
+        pass
+    except OSError:
+        pass
+    return ret
+
+
+def get_ref_loudness():
+    """Get default replaygain reference loudness from bs1770gain."""
+    buf = run_command("bs1770gain --help", stderr=subprocess.STDOUT)
+    if not buf:
+        return False
+    buf = re.search(r"\(([-\d.]+\s+LUFS), default\)", buf)
+    if "LUFS" not in buf.group(1):
+        return False
+    return buf.group(1)
 
 
 class Log(object):
@@ -124,11 +170,10 @@ class ThreadMkvrg(object):
 class CheckArgs(object):
     def __init__(self, utils):
         self.utils = utils
-        self.__check_binaries()
         args = self.__parse_args()
         self.utils.log.exit = self.utils.exit
         self.utils.log.set_level(self.utils.loglevel)
-        self.utils.ref_loudness = self.__get_ref_loudness()
+        self.utils.ref_loudness = get_ref_loudness()
         if self.utils.ref_loudness == "":
             self.utils.log("Could not find reference replaygain loudness from bs1770gain.")
             exit(1)
@@ -136,7 +181,7 @@ class CheckArgs(object):
         path = os.path
         for arg in args:
             if path.isdir(arg):
-                self.__check_dir(arg),
+                self.__check_dir(arg)
             elif path.isfile(arg):
                 self.__check_file(arg)
             else:
@@ -197,7 +242,7 @@ class CheckArgs(object):
             self.utils.minsize = 0
 
         self.utils.verify = args.verify
-        if self.utils.verify and not self.__check_binary("mediainfo"):
+        if self.utils.verify and not check_binary("mediainfo"):
             self.utils.log.error(
                 "You enabled the --verify option but you do not have mediainfo installed.")
             self.utils.log.info("Setting --verify to false.")
@@ -209,28 +254,9 @@ class CheckArgs(object):
             return ["."]
         return args.paths
 
-    def __check_binary(self, binary):
-        """Check if a binary is in PATH."""
-        result = True
-        devnull = open(os.devnull, 'w')
-        try:
-            subprocess.call([binary], stdout=devnull, stderr=devnull)
-        except OSError:
-            result = False
-        devnull.close()
-        return result
-
-    def __check_binaries(self):
-        """Check if all required binaries are in PATH."""
-        binaries = ["bs1770gain", "mkvpropedit", "mkvinfo"]
-        for binary in binaries:
-            if not self.__check_binary(binary):
-                print("ERROR: The program '" + binary + "' is required.")
-                exit(1)
-
     def __check_file(self, path):
         self.utils.log.info("Checking file (" + path + ").")
-        if not self.utils.run_command("mkvinfo " + path):
+        if not run_command("mkvinfo " + path):
             self.utils.log.error("File does not seem to contain Matroska data.")
             return
         if self.utils.minsize > 0 and os.path.getsize(path) < self.utils.minsize:
@@ -246,16 +272,6 @@ class CheckArgs(object):
             files.extend(fnmatch.filter(filenames, '*.[mM][kK]3[dD]'))
             for filename in files:
                 self.__check_file(os.path.join(rootdir, filename))
-
-    def __get_ref_loudness(self):
-        """Get default replaygain reference loudness from bs1770gain."""
-        buf = self.utils.run_command("bs1770gain --help", stderr=subprocess.STDOUT)
-        if not buf:
-            return False
-        buf = re.search("\(([-\d.]+\s+LUFS), default\)", buf)
-        if "LUFS" not in buf.group(1):
-            return False
-        return buf.group(1)
 
 
 class Utils(object):
@@ -278,8 +294,8 @@ class Utils(object):
         if first_check and self.force:
             self.log.info("Skipping replaygain tags check, --force is on.")
             return True
-        if "ITU-R BS.1770" in self.run_command("mediainfo " + path +
-                                               ' --Inform="Audio;%REPLAYGAIN_ALGORITHM%"'):
+        if "ITU-R BS.1770" in run_command("mediainfo " + path +
+                                          ' --Inform="Audio;%REPLAYGAIN_ALGORITHM%"'):
             if first_check:
                 self.log.info("Replaygain tags found in file (" + path + "), skipping.")
                 return False
@@ -292,18 +308,6 @@ class Utils(object):
             "No replaygain tags were found in file (" +
             path + ") after applying with mkvpropedit.")
         return False
-
-    def run_command(self, command, stderr=None, universal_newlines=False):
-        """Run a command in a shell, return the output as a string."""
-        ret = ""
-        try:
-            ret = str(subprocess.check_output(shlex.split(command), stderr=stderr,
-                                              universal_newlines=universal_newlines))
-        except subprocess.CalledProcessError:
-            pass
-        except OSError:
-            pass
-        return ret
 
 
 class MakeTmpFile(object):
@@ -372,6 +376,7 @@ class Mkvrg(object):
         self.cur_path = self.rg_integrated = self.rg_range = self.rg_peak = ""
         self.mk_tmp = MakeTmpFile()
         self.tmp_file = self.mk_tmp.path
+        self.tracks = {}
 
     def process_file(self, path):
         """Process a matroska file, analyzing it with bs1770gain and applying tags."""
@@ -383,9 +388,8 @@ class Mkvrg(object):
 
     def __get_tracks(self):
         """Get audio track numbers from bs1770gain"""
-        buf = StringIO(self.utils.run_command("bs1770gain -l " + self.cur_path, subprocess.STDOUT,
-                                              universal_newlines=True))
-        self.tracks = {}
+        buf = StringIO(run_command("bs1770gain -l " + self.cur_path, subprocess.STDOUT,
+                                   universal_newlines=True))
         i = 0
         for line in buf:
             if "Audio" in line and "Stream" in line:
@@ -408,7 +412,7 @@ class Mkvrg(object):
             self.utils.log.error(
                 self.thread + "No audio tracks found in file (" + self.cur_path + ")")
             return False
-        for tracknum, trackid in self.tracks.items():
+        for trackid in self.tracks.values():
             if not self.__get_bs1770gain_info(trackid):
                 continue
             if not self.__write_xml_file():
@@ -417,18 +421,18 @@ class Mkvrg(object):
         self.utils.check_tags(self.cur_path, False)
 
     def __get_bs1770gain_info(self, trackid):
-        buffer = StringIO(
-            self.utils.run_command(
+        buffer_ = StringIO(
+            run_command(
                 "bs1770gain --audio " + trackid + " -r " +
                 ("-p " if self.utils.sample_peak else "-t ") + self.cur_path,
                 subprocess.STDOUT, universal_newlines=True))
-        if not buffer:
+        if not buffer_:
             self.utils.log.error(
                 self.thread + "Problem running bs1770gain. (" + self.cur_path + ")")
             return False
 
         self.rg_integrated = self.rg_range = self.rg_peak = ""
-        for line in buffer:
+        for line in buffer_:
             if "ALBUM" in line:
                 break
             elif "integrated" in line and self.rg_integrated == "":
@@ -468,8 +472,8 @@ class Mkvrg(object):
 
     def __apply_tags(self, trackid):
         """Apply replaygain tags with mkvpropedit."""
-        if not self.utils.run_command("mkvpropedit --tags track:" + str(int(trackid) + 1) +
-                                      ":" + self.tmp_file + " " + self.cur_path):
+        if not run_command("mkvpropedit --tags track:" + str(int(trackid) + 1) +
+                           ":" + self.tmp_file + " " + self.cur_path):
             self.utils.log.error(
                 self.thread + "Problem applying replaygain tags to " + self.cur_path)
             return False

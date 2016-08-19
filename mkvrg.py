@@ -267,7 +267,7 @@ class CheckArgs(object):
         self.utils.files.extend([path])
 
     def __check_dir(self, directory):
-        for rootdir, dirnames, filenames in os.walk(directory):
+        for rootdir, _, filenames in os.walk(directory):
             files = fnmatch.filter(filenames, '*.[mM][kK][aAvV]')
             files.extend(fnmatch.filter(filenames, '*.[mM][kK]3[dD]'))
             for filename in files:
@@ -478,6 +478,7 @@ class Mkvrg(object):
                 self.thread + "Problem applying replaygain tags to " + self.cur_path)
             return False
         return True
+
 
 if __name__ == '__main__':
     main()

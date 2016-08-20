@@ -258,7 +258,10 @@ class CheckArgs(object):
         if self.utils.minsize > 0 and os.path.getsize(path) < self.utils.minsize:
             self.utils.log.info("The file is smaller than your --minsize setting, skipping.")
             return
-        if not run_command("mkvinfo " + path):
+        handle = open(path)
+        data = handle.read(64)
+        handle.close()
+        if not (b'\x1a\x45\xdf\xa3' in data and b"matroska" in data):
             self.utils.log.error("File does not seem to contain Matroska data.")
             return
         if not self.utils.check_tags(path):

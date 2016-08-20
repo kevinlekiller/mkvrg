@@ -261,7 +261,7 @@ class CheckArgs(object):
         handle = open(path)
         data = handle.read(64)
         handle.close()
-        if not ("\x1a\x45\xdf\xa3" and "matroska" in data):
+        if not ("\x1a\x45\xdf\xa3" in data and "matroska" in data):
             self.utils.log.error("File does not seem to contain Matroska data.")
             return
         if not self.utils.check_tags(path):

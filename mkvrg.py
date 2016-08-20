@@ -255,11 +255,11 @@ class CheckArgs(object):
 
     def __check_file(self, path):
         self.utils.log.info("Checking file (" + path + ").")
-        if not run_command("mkvinfo " + path):
-            self.utils.log.error("File does not seem to contain Matroska data.")
-            return
         if self.utils.minsize > 0 and os.path.getsize(path) < self.utils.minsize:
             self.utils.log.info("The file is smaller than your --minsize setting, skipping.")
+            return
+        if not run_command("mkvinfo " + path):
+            self.utils.log.error("File does not seem to contain Matroska data.")
             return
         if not self.utils.check_tags(path):
             return
@@ -317,14 +317,12 @@ class MkxFile(object):
 
     def is_mkx(self, path):
         self.utils.log.info("Checking file (" + path + ").")
-        if not run_command("mkvinfo " + path):
-            self.utils.log.error("File does not seem to contain Matroska data.")
-            return
         if self.utils.minsize > 0 and os.path.getsize(path) < self.utils.minsize:
             self.utils.log.info("The file is smaller than your --minsize setting, skipping.")
-            return
-        if not self.has_rgtags(path):
-            return
+            return False
+        if not run_command("mkvinfo " + path):
+            self.utils.log.error("File does not seem to contain Matroska data.")
+            return False
         self.utils.files.extend([path])
 
     def has_rgtags(self, path, first_check=True):

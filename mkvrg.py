@@ -178,11 +178,10 @@ class CheckArgs(object):
             self.utils.log("Could not find reference replaygain loudness from bs1770gain.")
             exit(1)
 
-        path = os.path
         for arg in args:
-            if path.isdir(arg):
+            if os.path.isdir(arg):
                 self.__check_dir(arg)
-            elif path.isfile(arg):
+            elif os.path.isfile(arg):
                 self.__check_file(arg)
             else:
                 self.utils.log.info("This does not look like a valid path: " + arg)
@@ -292,6 +291,47 @@ class Utils(object):
         if not self.verify:
             return True
         if first_check and self.force:
+            self.log.info("Skipping replaygain tags check, --force is on.")
+            return True
+        if "ITU-R BS.1770" in run_command("mediainfo " + path +
+                                          ' --Inform="Audio;%REPLAYGAIN_ALGORITHM%"'):
+            if first_check:
+                self.log.info("Replaygain tags found in file (" + path + "), skipping.")
+                return False
+            return True
+        if first_check:
+            self.log.info("No replaygain tags found in file (" + path + ") continuing.")
+            return True
+
+        self.log.error(
+            "No replaygain tags were found in file (" +
+            path + ") after applying with mkvpropedit.")
+        return False
+
+
+class MkxFile(object):
+    def __init__(self, path, utils=Utils()):
+        self.utils = utils
+        self.path = path
+        self.log = None
+
+    def is_mkx(self, path):
+        self.utils.log.info("Checking file (" + path + ").")
+        if not run_command("mkvinfo " + path):
+            self.utils.log.error("File does not seem to contain Matroska data.")
+            return
+        if self.utils.minsize > 0 and os.path.getsize(path) < self.utils.minsize:
+            self.utils.log.info("The file is smaller than your --minsize setting, skipping.")
+            return
+        if not self.has_rgtags(path):
+            return
+        self.utils.files.extend([path])
+
+    def has_rgtags(self, path, first_check=True):
+        """Check if matroska file has replaygain tags."""
+        if not self.utils.verify:
+            return True
+        if first_check and self.utils.force:
             self.log.info("Skipping replaygain tags check, --force is on.")
             return True
         if "ITU-R BS.1770" in run_command("mediainfo " + path +

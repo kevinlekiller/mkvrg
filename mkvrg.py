@@ -254,8 +254,9 @@ class CheckArgs(object):
         return args.paths
 
     def __check_file(self, path):
-        if MkxFile(path, self.utils).is_mkx():
-            self.utils.files.extend([path])
+        candidate = MkxFile(path, self.utils)
+        if candidate.ismatroska():
+            self.utils.files.extend([candidate.path])
 
     def __check_dir(self, directory):
         for rootdir, _, filenames in os.walk(directory):
@@ -307,7 +308,7 @@ class MkxFile(object):
         self.path = path
         self.log = None
 
-    def is_mkx(self):
+    def ismatroska(self):
         """Check if file is an actual matroska file and is of size 'minsize'"""
         path = self.path
         self.utils.log.info("Checking file (" + path + ").")

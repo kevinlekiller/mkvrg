@@ -323,7 +323,7 @@ class MkxFile(object):
             return False
         return True
 
-    def has_rgtags(self, path, first_check=True):
+    def hasrgtags(self, path, first_check=True):
         """Check if matroska file has replaygain tags."""
         if not self.utils.verify:
             return True
@@ -354,6 +354,41 @@ class MkxFile(object):
         # self.__get_tracks()
         # self.__process_tracks()
         # self.utils.log.info(self.thread + "Finished processing file " + path)
+
+
+class MatroskaFile(MkxFile):
+    """__init__ should make sure that objects of this type are matroska files
+    otherwise fail in some way (raise exception maybe?)
+    The idea is that we would just 'try' to instantiate this but if the check"""
+    def __init__(self, path, utils):
+        MkxFile.__init__(self, path, utils)
+        self.audio_tracks = None
+        # this should also take care of initializing self.audio_tracks
+        self.has_audio = self.__has_audio()
+        if not self.has_audio:
+            raise "NoAudio"
+
+    def __get_audio_tracks(self):
+        """Let bs1770gain list all availabe tracks and filter by type 'Audio'"""
+        if not self.audio_tracks:
+            # here goes what bs1770gain returns, already filtered
+            # but only if this is the first time this get called
+            pass
+
+        return self.audio_tracks
+
+    def __has_audio(self):
+        # initialize self.audio_tracks simply by checking if file has audio
+        if not self.audio_tracks:
+            self.audio_tracks = self.__get_audio_tracks()
+        return True if self.audio_tracks else False
+
+
+class MatroskaAudioTrack(MatroskaFile):
+    def __init__(self):
+        MatroskaFile.__init__(self)
+        self.track_id = 0
+        print(super.path)
 
 
 class MakeTmpFile(object):

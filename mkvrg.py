@@ -254,19 +254,8 @@ class CheckArgs(object):
         return args.paths
 
     def __check_file(self, path):
-        self.utils.log.info("Checking file (" + path + ").")
-        if self.utils.minsize > 0 and os.path.getsize(path) < self.utils.minsize:
-            self.utils.log.info("The file is smaller than your --minsize setting, skipping.")
-            return
-        handle = open(path)
-        data = handle.read(64)
-        handle.close()
-        if not (data.startswith("\x1a\x45\xdf\xa3") and "matroska" in data):
-            self.utils.log.error("File does not seem to contain Matroska data.")
-            return
-        if not self.utils.check_tags(path):
-            return
-        self.utils.files.extend([path])
+        if MkxFile(path, self.utils).is_mkx():
+            self.utils.files.extend([path])
 
     def __check_dir(self, directory):
         for rootdir, _, filenames in os.walk(directory):
@@ -318,15 +307,20 @@ class MkxFile(object):
         self.path = path
         self.log = None
 
-    def is_mkx(self, path):
+    def is_mkx(self):
+        """Check if file is an actual matroska file and is of size 'minsize'"""
+        path = self.path
         self.utils.log.info("Checking file (" + path + ").")
         if self.utils.minsize > 0 and os.path.getsize(path) < self.utils.minsize:
             self.utils.log.info("The file is smaller than your --minsize setting, skipping.")
             return False
-        if not run_command("mkvinfo " + path):
+        handle = open(path)
+        data = handle.read(64)
+        handle.close()
+        if not (data.startswith("\x1a\x45\xdf\xa3") and "matroska" in data):
             self.utils.log.error("File does not seem to contain Matroska data.")
             return False
-        self.utils.files.extend([path])
+        return True
 
     def has_rgtags(self, path, first_check=True):
         """Check if matroska file has replaygain tags."""
@@ -349,6 +343,16 @@ class MkxFile(object):
             "No replaygain tags were found in file (" +
             path + ") after applying with mkvpropedit.")
         return False
+
+    def process_file(self):
+        """Process a matroska file, analyzing it with bs1770gain and applying tags."""
+        path = self.path
+        print(path is self.path)
+        return
+        # self.utils.log.info(self.thread + "Processing file: " + path)
+        # self.__get_tracks()
+        # self.__process_tracks()
+        # self.utils.log.info(self.thread + "Finished processing file " + path)
 
 
 class MakeTmpFile(object):
@@ -421,11 +425,13 @@ class Mkvrg(object):
 
     def process_file(self, path):
         """Process a matroska file, analyzing it with bs1770gain and applying tags."""
+        mkx_file = MkxFile(path)
+        path = mkx_file.path
         self.cur_path = path
-        self.utils.log.info(self.thread + "Processing file: " + self.cur_path)
+        self.utils.log.info(self.thread + "Processing file: " + path)
         self.__get_tracks()
         self.__process_tracks()
-        self.utils.log.info(self.thread + "Finished processing file " + self.cur_path)
+        self.utils.log.info(self.thread + "Finished processing file " + path)
 
     def __get_tracks(self):
         """Get audio track numbers from bs1770gain"""

@@ -414,7 +414,7 @@ class XmlUtils(object):
 class Mkvrg(object):
     def __init__(self, utils, thread=0):
         self.utils = utils
-        self.thread = "Thread " + str(thread) + ":\t"
+        self.s_thread = "Thread " + str(thread) + ":\t"
         self.xml_utils = XmlUtils(self.utils.ref_loudness)
         self.track_count = 0
         self.track = {}
@@ -428,10 +428,10 @@ class Mkvrg(object):
         mkx_file = MkxFile(path)
         path = mkx_file.path
         self.cur_path = path
-        self.utils.log.info(self.thread + "Processing file: " + path)
+        self.utils.log.info(self.s_thread + "Processing file: " + path)
         self.__get_tracks()
         self.__process_tracks()
-        self.utils.log.info(self.thread + "Finished processing file " + path)
+        self.utils.log.info(self.s_thread + "Finished processing file " + path)
 
     def __get_tracks(self):
         """Get audio track numbers from bs1770gain"""
@@ -443,13 +443,13 @@ class Mkvrg(object):
                 i += 1
                 if self.utils.default_track is True and "default" not in line:
                     self.utils.log.info(
-                        self.thread + "Skipping non default audio track " + str(i) +
+                        self.s_thread + "Skipping non default audio track " + str(i) +
                         ", you enabled --default (" + self.cur_path + ")")
                     continue
                 matches = self.utils.track_list_regex.search(line)
                 if not matches:
                     self.utils.log.warning(
-                        self.thread + "Problem finding track number for track " + str(i) +
+                        self.s_thread + "Problem finding track number for track " + str(i) +
                         " (" + self.cur_path + ")")
                     continue
                 self.tracks[i] = matches.group(1)
@@ -457,7 +457,7 @@ class Mkvrg(object):
     def __process_tracks(self):
         if not self.tracks:
             self.utils.log.error(
-                self.thread + "No audio tracks found in file (" + self.cur_path + ")")
+                self.s_thread + "No audio tracks found in file (" + self.cur_path + ")")
             return False
         for trackid in self.tracks.values():
             if not self.__get_bs1770gain_info(trackid):
@@ -475,7 +475,7 @@ class Mkvrg(object):
                 subprocess.STDOUT, universal_newlines=True))
         if not buffer_:
             self.utils.log.error(
-                self.thread + "Problem running bs1770gain. (" + self.cur_path + ")")
+                self.s_thread + "Problem running bs1770gain. (" + self.cur_path + ")")
             return False
 
         self.rg_integrated = self.rg_range = self.rg_peak = ""
@@ -499,7 +499,7 @@ class Mkvrg(object):
                 self.rg_peak = matches.group(1)
         if not self.rg_integrated or not self.rg_peak or not self.rg_range:
             self.utils.log.error(
-                self.thread + "Could not find replaygain info from bs1770gain. (" +
+                self.s_thread + "Could not find replaygain info from bs1770gain. (" +
                 self.cur_path + ")")
             return False
 
@@ -513,7 +513,7 @@ class Mkvrg(object):
         self.xml_utils.write_rg_xml(self.tmp_file)
         if os.path.getsize(self.tmp_file) == 0:
             self.utils.log.error(
-                self.thread + "Could not write XML to temp file (" + self.cur_path + ")")
+                self.s_thread + "Could not write XML to temp file (" + self.cur_path + ")")
             return False
         return True
 
@@ -522,7 +522,7 @@ class Mkvrg(object):
         if not run_command("mkvpropedit --tags track:" + str(int(trackid) + 1) +
                            ":" + self.tmp_file + " " + self.cur_path):
             self.utils.log.error(
-                self.thread + "Problem applying replaygain tags to " + self.cur_path)
+                self.s_thread + "Problem applying replaygain tags to " + self.cur_path)
             return False
         return True
 

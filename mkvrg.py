@@ -476,11 +476,13 @@ class Mkvrg(object):
         return True
 
 
-class MkxFile(object):
-    def __init__(self, path, utils=Utils()):
-        self.utils = utils
+class MkxFile(Mkvrg):
+    def __init__(self, path, utils):
+        # !!! Don't be tempted to call
+        # super(self.__class__, self).__init__(utils), it is not
+        # quite the same!!! Looks like some level of redundancy is left in Python 2.7 at least.
+        super(MkxFile, self).__init__(utils)
         self.path = path
-        self.log = None
 
     def ismatroska(self):
         """Check if file is an actual matroska file and is of size 'minsize'"""
@@ -502,25 +504,25 @@ class MkxFile(object):
         if not self.utils.verify:
             return True
         if first_check and self.utils.force:
-            self.log.info("Skipping replaygain tags check, --force is on.")
+            self.utils.log.info("Skipping replaygain tags check, --force is on.")
             return True
         if "ITU-R BS.1770" in run_command("mediainfo " + path +
                                           ' --Inform="Audio;%REPLAYGAIN_ALGORITHM%"'):
             if first_check:
-                self.log.info("Replaygain tags found in file (" + path + "), skipping.")
+                self.utils.log.info("Replaygain tags found in file (" + path + "), skipping.")
                 return False
             return True
         if first_check:
-            self.log.info("No replaygain tags found in file (" + path + ") continuing.")
+            self.utils.log.info("No replaygain tags found in file (" + path + ") continuing.")
             return True
 
-        self.log.error(
+        self.utils.log.error(
             "No replaygain tags were found in file (" +
             path + ") after applying with mkvpropedit.")
         return False
 
 
-class MatroskaFile(MkxFile, Mkvrg):
+class MatroskaFile(MkxFile):
     """
     Objects of this class are guaranteed to be of file type matroska AND to have audio tracks.
     If one tries to instantiate this class and the above conditions are not met an exception will
@@ -528,13 +530,15 @@ class MatroskaFile(MkxFile, Mkvrg):
     """
 
     def __init__(self, path, utils):
-        MkxFile.__init__(self, path, utils)
-        Mkvrg.__init__(self, utils)
+        # !!! Don't be tempted to call
+        # super(self.__class__, self).__init__(path, utils), it is not
+        # quite the same!!! Looks like some level of redundancy is left in Python 2.7 at least.
+        super(MatroskaFile, self).__init__(path, utils)
+
         # this should also take care of initializing self.tracks
-        self.path = path
         if not self.ismatroska():
             raise ValueError("No matroska data found")
-        if not self.has_audio():
+        elif not self.has_audio():
             raise ValueError("No audio")
 
     def has_audio(self):

@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """Calculate Replaygain for all audio tracks in Matroska files and write the
 appropriate track tags to said files"""
+# pylint: disable=too-few-public-methods,too-many-instance-attributes
 
 from __future__ import print_function
 import os

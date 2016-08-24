@@ -374,13 +374,13 @@ class Mkvrg(object):
     def process_file(self, path):
         """Process a matroska file, analyzing it with bs1770gain and applying tags."""
         try:
-            mkx_file = MatroskaFile(path, self.utils)
-            self.utils.log.info(self.s_thread + "Processing file: " + mkx_file.path)
-            self.get_tracks(mkx_file.path)
-            self.__process_tracks(mkx_file.path)
-            self.utils.log.info(self.s_thread + "Finished processing file " + mkx_file.path)
+            MatroskaFile(path, self.utils)
+            self.utils.log.info(self.s_thread + "Processing file: " + path)
+            self.get_tracks(path)
+            self.__process_tracks(path)
+            self.utils.log.info(self.s_thread + "Finished processing file " + path)
         except ValueError as error:
-            print("Got an error when trying to do the processing: {}".format(error))
+            self.utils.log.error("Got an error when trying to do the processing: {}".format(error))
 
     def get_tracks(self, path):
         """Get audio track numbers from bs1770gain"""

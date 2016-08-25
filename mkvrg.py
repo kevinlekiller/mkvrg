@@ -52,8 +52,8 @@ def process_thread(thread, queue, utils):
         if not work:
             queue.task_done()
             return
-        mkvrg = Mkvrg(utils, thread)
-        mkvrg.process_file(work)
+        mkvrg = MatroskaFile(utils=utils, path=work, thread=thread)
+        mkvrg.process_file()
         queue.task_done()
 
 
@@ -255,7 +255,7 @@ class CheckArgs(object):
         return args.paths
 
     def __check_file(self, path):
-        candidate = MkxFile(path, self.utils)
+        candidate = MkxFile(path=path, utils=self.utils)
         if candidate.ismatroska():
             self.utils.files.extend([candidate.path])
 
@@ -360,8 +360,10 @@ class XmlUtils(object):
 
 
 class Mkvrg(object):
-    def __init__(self, utils, thread=0):
+    def __init__(self, utils, thread=0, **kwds):
         self.utils = utils
+        # Strictly, len(**kwds) should now be 0, but if not we might have forgot something.
+        super(Mkvrg, self).__init__(**kwds)
         self.s_thread = "Thread " + str(thread) + ":\t"
         self.xml_utils = XmlUtils(self.utils.ref_loudness)
         self.track_count = 0
@@ -370,17 +372,6 @@ class Mkvrg(object):
         self.mk_tmp = MakeTmpFile()
         self.tmp_file = self.mk_tmp.path
         self.tracks = {}
-
-    def process_file(self, path):
-        """Process a matroska file, analyzing it with bs1770gain and applying tags."""
-        try:
-            MatroskaFile(path, self.utils)
-            self.utils.log.info(self.s_thread + "Processing file: " + path)
-            self.get_tracks(path)
-            self.__process_tracks(path)
-            self.utils.log.info(self.s_thread + "Finished processing file " + path)
-        except ValueError as error:
-            self.utils.log.error("Got an error when trying to do the processing: {}".format(error))
 
     def get_tracks(self, path):
         """Get audio track numbers from bs1770gain"""
@@ -403,86 +394,14 @@ class Mkvrg(object):
                     continue
                 self.tracks[i] = matches.group(1)
 
-    def __process_tracks(self, path):
-        if not self.tracks:
-            self.utils.log.error(
-                self.s_thread + "No audio tracks found in file (" + path + ")")
-            return False
-        for trackid in self.tracks.values():
-            if not self.__get_bs1770gain_info(trackid, path):
-                continue
-            if not self.__write_xml_file(path):
-                continue
-            self.__apply_tags(trackid, path)
-        self.utils.check_tags(path, False)
-
-    def __get_bs1770gain_info(self, trackid, path):
-        buffer_ = StringIO(
-            run_command(
-                "bs1770gain --audio " + trackid + " -r " +
-                ("-p " if self.utils.sample_peak else "-t ") + path,
-                subprocess.STDOUT, universal_newlines=True))
-        if not buffer_:
-            self.utils.log.error(
-                self.s_thread + "Problem running bs1770gain. (" + path + ")")
-            return False
-
-        self.rg_integrated = self.rg_range = self.rg_peak = ""
-        for line in buffer_:
-            if "ALBUM" in line:
-                break
-            elif "integrated" in line and self.rg_integrated == "":
-                matches = self.utils.rg_integrated_regex.search(line)
-                if not matches:
-                    break
-                self.rg_integrated = matches.group(1)
-            elif "range" in line and self.rg_range == "":
-                matches = self.utils.rg_range_regex.search(line)
-                if not matches:
-                    break
-                self.rg_range = matches.group(1)
-            elif "peak" in line and self.rg_peak == "":
-                matches = self.utils.rg_peak_regex.search(line)
-                if not matches:
-                    break
-                self.rg_peak = matches.group(1)
-        if not self.rg_integrated or not self.rg_peak or not self.rg_range:
-            self.utils.log.error(
-                self.s_thread + "Could not find replaygain info from bs1770gain. (" +
-                path + ")")
-            return False
-
-        return True
-
-    def __write_xml_file(self, path):
-        """Write XML file with tags to temp file, for mkvpropedit."""
-        self.mk_tmp.clear()
-        self.xml_utils.set_rg_head()
-        self.xml_utils.set_rg_tags(self.rg_integrated, self.rg_range, self.rg_peak)
-        self.xml_utils.write_rg_xml(self.tmp_file)
-        if os.path.getsize(self.tmp_file) == 0:
-            self.utils.log.error(
-                self.s_thread + "Could not write XML to temp file (" + path + ")")
-            return False
-        return True
-
-    def __apply_tags(self, trackid, path):
-        """Apply replaygain tags with mkvpropedit."""
-        if not run_command("mkvpropedit --tags track:" + str(int(trackid) + 1) +
-                           ":" + self.tmp_file + " " + path):
-            self.utils.log.error(
-                self.s_thread + "Problem applying replaygain tags to " + path)
-            return False
-        return True
-
 
 class MkxFile(Mkvrg):
-    def __init__(self, path, utils):
+    def __init__(self, path, **kwds):
         # !!! Don't be tempted to call
         # super(self.__class__, self).__init__(utils), it is not
         # quite the same!!! Looks like some level of redundancy is left in Python 2.7 at least.
-        super(MkxFile, self).__init__(utils)
         self.path = path
+        super(MkxFile, self).__init__(**kwds)
 
     def ismatroska(self):
         """Check if file is an actual matroska file and is of size 'minsize'"""
@@ -529,17 +448,100 @@ class MatroskaFile(MkxFile):
     be raised.
     """
 
-    def __init__(self, path, utils):
+    def __init__(self, **kwds):
         # !!! Don't be tempted to call
         # super(self.__class__, self).__init__(path, utils), it is not
         # quite the same!!! Looks like some level of redundancy is left in Python 2.7 at least.
-        super(MatroskaFile, self).__init__(path, utils)
+        super(MatroskaFile, self).__init__(**kwds)
 
         # this should also take care of initializing self.tracks
         if not self.ismatroska():
             raise ValueError("No matroska data found")
         elif not self.has_audio():
             raise ValueError("No audio")
+
+    def __get_bs1770gain_info(self, trackid):
+        buffer_ = StringIO(
+            run_command(
+                "bs1770gain --audio " + trackid + " -r " +
+                ("-p " if self.utils.sample_peak else "-t ") + self.path,
+                subprocess.STDOUT, universal_newlines=True))
+        if not buffer_:
+            self.utils.log.error(
+                self.s_thread + "Problem running bs1770gain. (" + self.path + ")")
+            return False
+
+        self.rg_integrated = self.rg_range = self.rg_peak = ""
+        for line in buffer_:
+            if "ALBUM" in line:
+                break
+            elif "integrated" in line and self.rg_integrated == "":
+                matches = self.utils.rg_integrated_regex.search(line)
+                if not matches:
+                    break
+                self.rg_integrated = matches.group(1)
+            elif "range" in line and self.rg_range == "":
+                matches = self.utils.rg_range_regex.search(line)
+                if not matches:
+                    break
+                self.rg_range = matches.group(1)
+            elif "peak" in line and self.rg_peak == "":
+                matches = self.utils.rg_peak_regex.search(line)
+                if not matches:
+                    break
+                self.rg_peak = matches.group(1)
+        if not self.rg_integrated or not self.rg_peak or not self.rg_range:
+            self.utils.log.error(
+                self.s_thread + "Could not find replaygain info from bs1770gain. (" +
+                self.path + ")")
+            return False
+
+        return True
+
+    def __process_tracks(self):
+        if not self.tracks:
+            self.utils.log.error(
+                self.s_thread + "No audio tracks found in file (" + self.path + ")")
+            return False
+        for trackid in self.tracks.values():
+            if not self.__get_bs1770gain_info(trackid):
+                continue
+            if not self.__write_xml_file(self.path):
+                continue
+            self.__apply_tags(trackid, self.path)
+        self.utils.check_tags(self.path, False)
+
+    def __write_xml_file(self, path):
+        """Write XML file with tags to temp file, for mkvpropedit."""
+        self.mk_tmp.clear()
+        self.xml_utils.set_rg_head()
+        self.xml_utils.set_rg_tags(self.rg_integrated, self.rg_range, self.rg_peak)
+        self.xml_utils.write_rg_xml(self.tmp_file)
+        if os.path.getsize(self.tmp_file) == 0:
+            self.utils.log.error(
+                self.s_thread + "Could not write XML to temp file (" + path + ")")
+            return False
+        return True
+
+    def __apply_tags(self, trackid, path):
+        """Apply replaygain tags with mkvpropedit."""
+        if not run_command("mkvpropedit --tags track:" + str(int(trackid) + 1) +
+                           ":" + self.tmp_file + " " + path):
+            self.utils.log.error(
+                self.s_thread + "Problem applying replaygain tags to " + path)
+            return False
+        return True
+
+    def process_file(self):
+        """Process a matroska file, analyzing it with bs1770gain and applying tags."""
+        try:
+            MkxFile(path=self.path, utils=self.utils)
+            self.utils.log.info(self.s_thread + "Processing file: " + self.path)
+            self.get_tracks(self.path)
+            self.__process_tracks()
+            self.utils.log.info(self.s_thread + "Finished processing file " + self.path)
+        except ValueError as error:
+            self.utils.log.error("Got an error when trying to do the processing: {}".format(error))
 
     def has_audio(self):
         # initialize self.tracks simply by checking if file has audio

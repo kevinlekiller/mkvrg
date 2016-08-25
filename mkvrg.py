@@ -534,14 +534,10 @@ class MatroskaFile(MkxFile):
 
     def process_file(self):
         """Process a matroska file, analyzing it with bs1770gain and applying tags."""
-        try:
-            MkxFile(path=self.path, utils=self.utils)
-            self.utils.log.info(self.s_thread + "Processing file: " + self.path)
-            self.get_tracks(self.path)
-            self.__process_tracks()
-            self.utils.log.info(self.s_thread + "Finished processing file " + self.path)
-        except ValueError as error:
-            self.utils.log.error("Got an error when trying to do the processing: {}".format(error))
+        self.utils.log.info(self.s_thread + "Processing file: " + self.path)
+        self.get_tracks(self.path)
+        self.__process_tracks()
+        self.utils.log.info(self.s_thread + "Finished processing file " + self.path)
 
     def has_audio(self):
         # initialize self.tracks simply by checking if file has audio

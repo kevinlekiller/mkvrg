@@ -257,7 +257,7 @@ class CheckArgs(object):
     def __check_file(self, path):
         candidate = MkxFile(path=path, utils=self.utils)
         if candidate.ismatroska():
-            self.utils.files.extend([candidate.get_path()])
+            self.utils.files.append(candidate.get_path())
 
     def __check_dir(self, directory):
         for rootdir, _, filenames in os.walk(directory):

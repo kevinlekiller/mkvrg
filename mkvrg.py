@@ -19,6 +19,7 @@ try:
 except ImportError:
     from io import StringIO
 from argparse import ArgumentParser
+from collections import OrderedDict
 
 LOGLEVELS = {
     "all": 0,
@@ -52,8 +53,9 @@ def process_thread(thread, queue, utils):
         if not work:
             queue.task_done()
             return
-        mkvrg = MatroskaFile(utils=utils, path=work, thread=thread)
-        mkvrg.process_file()
+        matroska_file = utils.files[work]
+        matroska_file.set_thread(thread)
+        matroska_file.process_file()
         queue.task_done()
 
 
@@ -160,7 +162,7 @@ class ThreadMkvrg(object):
             process.start()
             processes.append(process)
 
-        iterator = itertools.chain(utils.files, (None,)*threads)
+        iterator = itertools.chain(utils.files.keys(), (None,)*threads)
         for work in iterator:
             queue.put(work)
 
@@ -254,11 +256,10 @@ class CheckArgs(object):
 
     def __check_file(self, path):
         try:
-            candidate = MatroskaFile(path=path, utils=self.utils)
-            self.utils.files.append(candidate.get_path())
+            self.utils.files[path] = MatroskaFile(path=path, utils=self.utils)
         except ValueError as error:
-            self.utils.log.info("Path '{}' does not point to a file of interest: {}."
-                                .format(path, error))
+            self.utils.log.debug("Path '{}' does not point to a file of interest: {}."
+                                 .format(path, error))
 
     def __check_dir(self, directory):
         for rootdir, _, filenames in os.walk(directory):
@@ -278,7 +279,7 @@ class Utils(object):
         self.rg_integrated_regex = re.compile(r"([-\d.]+\s*LU)\s*$")
         self.rg_range_regex = re.compile(r"([-\d.]+\s*LUFS)\s*$")
         self.rg_peak_regex = re.compile(r"([-\d.]+)\s*$")
-        self.files = []
+        self.files = OrderedDict()
         self.log = None
 
     def check_tags(self, path, first_check=True):
@@ -365,7 +366,6 @@ class Mkvrg(object):
         # Strictly, len(**kwds) should now be 0, but if not we might have forgot something.
         super(Mkvrg, self).__init__(**kwds)
         self.utils = utils
-        self.s_thread = "Thread " + str(thread) + ":\t"
         self.xml_utils = XmlUtils(self.utils.ref_loudness)
         self.track_count = 0
         self.track = {}
@@ -373,6 +373,7 @@ class Mkvrg(object):
         self.mk_tmp = MakeTmpFile()
         self.tmp_file = self.mk_tmp.path
         self.tracks = {}
+        self.set_thread(thread)
 
     def get_tracks(self, path):
         """Get audio track numbers from bs1770gain"""
@@ -394,6 +395,10 @@ class Mkvrg(object):
                         " (" + path + ")")
                     continue
                 self.tracks[i] = matches.group(1)
+
+    def set_thread(self, num_thread):
+        self.__thread = num_thread
+        self.s_thread = "Thread {}:\t".format(num_thread)
 
 
 class MkxFile(Mkvrg):
@@ -551,6 +556,7 @@ class MatroskaFile(MkxFile):
         self.get_tracks(self.get_path())
         self.__process_tracks()
         self.utils.log.info(self.s_thread + "Finished processing file " + self.get_path())
+        return
 
     def has_audio(self):
         # initialize self.tracks simply by checking if file has audio

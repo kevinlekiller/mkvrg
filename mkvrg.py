@@ -556,7 +556,6 @@ class MatroskaFile(MkxFile):
         self.get_tracks(self.get_path())
         self.__process_tracks()
         self.utils.log.info(self.s_thread + "Finished processing file " + self.get_path())
-        return
 
     def has_audio(self):
         # initialize self.tracks simply by checking if file has audio

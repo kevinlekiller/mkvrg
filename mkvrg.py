@@ -14,6 +14,7 @@ import multiprocessing
 import itertools
 import logging
 import xml.etree.cElementTree as xml
+import hashlib
 try:
     from StringIO import StringIO
 except ImportError:
@@ -256,7 +257,10 @@ class CheckArgs(object):
 
     def __check_file(self, path):
         try:
-            self.utils.files[path] = MatroskaFile(path=path, utils=self.utils)
+            # Just some gimmick. Save a tiny bit of memory with 16 byte fixed size hash. Collisions
+            # should be no problem on a sane filesystem, I reckon. (I was bored;)
+            self.utils.files[hashlib.md5(path).digest()] = MatroskaFile(path=path,
+                                                                        utils=self.utils)
         except ValueError as error:
             self.utils.log.debug("Path '{}' does not point to a file of interest: {}."
                                  .format(path, error))

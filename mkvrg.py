@@ -257,7 +257,7 @@ class CheckArgs(object):
     def __check_file(self, path):
         candidate = MkxFile(path=path, utils=self.utils)
         if candidate.ismatroska():
-            self.utils.files.extend([candidate.path])
+            self.utils.files.extend([candidate.get_path()])
 
     def __check_dir(self, directory):
         for rootdir, _, filenames in os.walk(directory):
@@ -361,9 +361,9 @@ class XmlUtils(object):
 
 class Mkvrg(object):
     def __init__(self, utils, thread=0, **kwds):
-        self.utils = utils
         # Strictly, len(**kwds) should now be 0, but if not we might have forgot something.
         super(Mkvrg, self).__init__(**kwds)
+        self.utils = utils
         self.s_thread = "Thread " + str(thread) + ":\t"
         self.xml_utils = XmlUtils(self.utils.ref_loudness)
         self.track_count = 0
@@ -397,15 +397,21 @@ class Mkvrg(object):
 
 class MkxFile(Mkvrg):
     def __init__(self, path, **kwds):
+        if os.path.isfile(path):
+            self.__path = path
+        else:
+            raise ValueError("Path '{}' does not point to a file".format(path))
         # !!! Don't be tempted to call
         # super(self.__class__, self).__init__(utils), it is not
         # quite the same!!! Looks like some level of redundancy is left in Python 2.7 at least.
-        self.path = path
         super(MkxFile, self).__init__(**kwds)
+
+    def get_path(self):
+        return self.__path
 
     def ismatroska(self):
         """Check if file is an actual matroska file and is of size 'minsize'"""
-        path = self.path
+        path = self.__path
         self.utils.log.info("Checking file (" + path + ").")
         if self.utils.minsize > 0 and os.path.getsize(path) < self.utils.minsize:
             self.utils.log.info("The file is smaller than your --minsize setting, skipping.")
@@ -463,12 +469,18 @@ class MatroskaFile(MkxFile):
     def __get_bs1770gain_info(self, trackid):
         buffer_ = StringIO(
             run_command(
-                "bs1770gain --audio " + trackid + " -r " +
-                ("-p " if self.utils.sample_peak else "-t ") + self.path,
-                subprocess.STDOUT, universal_newlines=True))
+                "bs1770gain --audio {trackid} -r {opt_peak_algo} {path}"
+                .format(
+                    trackid=trackid,
+                    opt_peak_algo="-p " if self.utils.sample_peak else "-t ",
+                    path=self.get_path()
+                ),
+                subprocess.STDOUT, universal_newlines=True
+            )
+        )
         if not buffer_:
             self.utils.log.error(
-                self.s_thread + "Problem running bs1770gain. (" + self.path + ")")
+                self.s_thread + "Problem running bs1770gain. (" + self.get_path() + ")")
             return False
 
         self.rg_integrated = self.rg_range = self.rg_peak = ""
@@ -493,7 +505,7 @@ class MatroskaFile(MkxFile):
         if not self.rg_integrated or not self.rg_peak or not self.rg_range:
             self.utils.log.error(
                 self.s_thread + "Could not find replaygain info from bs1770gain. (" +
-                self.path + ")")
+                self.get_path() + ")")
             return False
 
         return True
@@ -501,15 +513,15 @@ class MatroskaFile(MkxFile):
     def __process_tracks(self):
         if not self.tracks:
             self.utils.log.error(
-                self.s_thread + "No audio tracks found in file (" + self.path + ")")
+                self.s_thread + "No audio tracks found in file (" + self.get_path() + ")")
             return False
         for trackid in self.tracks.values():
             if not self.__get_bs1770gain_info(trackid):
                 continue
-            if not self.__write_xml_file(self.path):
+            if not self.__write_xml_file(self.get_path()):
                 continue
-            self.__apply_tags(trackid, self.path)
-        self.utils.check_tags(self.path, False)
+            self.__apply_tags(trackid, self.get_path())
+        self.utils.check_tags(self.get_path(), False)
 
     def __write_xml_file(self, path):
         """Write XML file with tags to temp file, for mkvpropedit."""
@@ -534,15 +546,15 @@ class MatroskaFile(MkxFile):
 
     def process_file(self):
         """Process a matroska file, analyzing it with bs1770gain and applying tags."""
-        self.utils.log.info(self.s_thread + "Processing file: " + self.path)
-        self.get_tracks(self.path)
+        self.utils.log.info(self.s_thread + "Processing file: " + self.get_path())
+        self.get_tracks(self.get_path())
         self.__process_tracks()
-        self.utils.log.info(self.s_thread + "Finished processing file " + self.path)
+        self.utils.log.info(self.s_thread + "Finished processing file " + self.get_path())
 
     def has_audio(self):
         # initialize self.tracks simply by checking if file has audio
         if not self.tracks:
-            self.get_tracks(self.path)
+            self.get_tracks(self.get_path())
         return True if self.tracks else False
 
 

@@ -182,10 +182,8 @@ class CheckArgs(object):
         for arg in args:
             if os.path.isdir(arg):
                 self.__check_dir(arg)
-            elif os.path.isfile(arg):
-                self.__check_file(arg)
             else:
-                self.utils.log.info("This does not look like a valid path: " + arg)
+                self.__check_file(arg)
 
     def __parse_args(self):
         """Parse command line arguments."""
@@ -255,9 +253,12 @@ class CheckArgs(object):
         return args.paths
 
     def __check_file(self, path):
-        candidate = MkxFile(path=path, utils=self.utils)
-        if candidate.ismatroska():
+        try:
+            candidate = MatroskaFile(path=path, utils=self.utils)
             self.utils.files.append(candidate.get_path())
+        except ValueError as error:
+            self.utils.log.info("Path '{}' does not point to a file of interest: {}."
+                                .format(path, error))
 
     def __check_dir(self, directory):
         for rootdir, _, filenames in os.walk(directory):
@@ -420,7 +421,7 @@ class MkxFile(Mkvrg):
         data = handle.read(64)
         handle.close()
         if not (data.startswith("\x1a\x45\xdf\xa3") and "matroska" in data):
-            self.utils.log.error("File does not seem to contain Matroska data.")
+            self.utils.log.debug("File does not seem to contain Matroska data.")
             return False
         return True
 

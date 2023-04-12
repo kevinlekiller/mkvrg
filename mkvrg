@@ -1,7 +1,7 @@
 #!/bin/bash
 
-<<LICENSE
-    Copyright (C) 2016  kevinlekiller
+cat > /dev/null <<LICENSE
+    Copyright (C) 2016,2023  kevinlekiller
     Copyright (C) 2016  WhitePeter
     
     This program is free software; you can redistribute it and/or
@@ -20,7 +20,7 @@
     https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html
 LICENSE
 
-<<DESCRIPTION
+cat > /dev/null <<DESCRIPTION
     Bash script for analyzing audio tracks in matroska files with BS1770GAIN and
     applying replaygain (EBU r128) track and sample peak information
     with mkvpropedit, this avoids remuxing the matroksa file.
@@ -28,12 +28,13 @@ LICENSE
     directory it will recursively search in it for files.
     It will only work on files with these extensions: "mkv, mka, mk3d".
     
-    Requires: bs1770gain, mkvpropedit, file, gnu grep, which, find, tr,
-              (optional) mediainfo
+    Requires: bs1770gain ffprobe mkvpropedit
     
     Requires at minimum bs1770gain 0.4.11 (otherwise if the matroska file
     has multiple audio tracks, it will scan the wrong track for
     replaygain information, 0.4.11 fixes this issue).
+
+    Note (2023): Works on 0.4.12 also, might work on newer versions, but untested.
     
     Change settings below.
     
@@ -49,8 +50,8 @@ DESCRIPTION
 ##################################### Settings ##########################################
 #########################################################################################
 
-# Check if the file already has tags or if tags were written succesfully, requires mediainfo.
-VERIFY=${VERIFY:-false}
+# Check if the file already has tags or if tags were written succesfully.
+VERIFY=${VERIFY:-true}
 
 # Force mkvrg to process matroska files, even if they already have replaygain tags. (ignored if VERIFY is false)
 FORCE=${FORCE:-false}
@@ -59,19 +60,27 @@ FORCE=${FORCE:-false}
 # For example, set to +50M to ignore files under 50MB.
 MINSIZE=${MINSIZE:-"+0"}
 
+# Type of peak calculation to use.
+# sample : Faster but less accurate.
+# true : Slower but accurate.
+PEAKTYPE=${PEAKTYPE:-"sample"}
+
 #########################################################################################
 #########################################################################################
 #########################################################################################
 
-if [[ $VERIFY == true ]] && [[ ! $(which mediainfo) ]]; then
-    echo -e "\e[31mERROR: You set verify to on but mediainfo is not installed.\e[0m"
+if [[ ! $PEAKTYPE =~ ^(sample|peak)$ ]]; then
+    echo -e "\e[31mERROR: PEAKTYPE must be either sample or peak.\e[0m"
     exit 1
 fi
 
-if [[ $(which bs1770gain) == "" ]] || [[ $(which mkvpropedit) == "" ]]; then
-    echo -e "\e[31mERROR: These programs are required bs1770gain, mkvpropedit\e[0m"
-    exit 1
-fi
+REQPROGS="bs1770gain ffprobe file find grep mkvpropedit tr"
+for PROG in $REQPROGS; do
+    if ! which "$PROG" &> /dev/null; then
+        echo -e "\e[31mERROR: This program is required: $PROG\e[0m"
+        exit 1
+    fi
+done
 
 REFLOUDNESS=$(bs1770gain --help 2>&1 | grep -Poi "[-\d.]+\s*LUFS,?\s*default" | cut -d\  -f1)
 if [[ $REFLOUDNESS == "" ]]; then
@@ -80,35 +89,36 @@ if [[ $REFLOUDNESS == "" ]]; then
 fi
 
 TMPFILE="$(mktemp)"
-
 if [[ ! -f $TMPFILE ]] || [[ ! -w $TMPFILE ]]; then
-    echo "\e[31mERROR: Could not create temp file $TMPFILE. Check permissions.\e[0m"
+    echo -e "\e[31mERROR: Could not create temp file $TMPFILE. Check permissions.\e[0m"
     exit 1
 fi
 
-trap cleantmp SIGHUP SIGINT SIGQUIT SIGFPE SIGKILL SIGTERM
+trap cleantmp SIGHUP SIGINT SIGQUIT SIGTERM
 
 function cleantmp() {
-    rm -f $TMPFILE
-    if [[ ! -z $1 ]]; then
-        exit $1
+    rm -f "$TMPFILE"
+    if [[ -n $1 ]]; then
+        exit "$1"
     fi
     exit 1
 }
 
 i=0
-while read file; do
+while read -r file; do
+    file="$(realpath "$file")"
     if [[ ! $(file "$file") =~ "Matroska" ]]; then
         echo -e "\e[92mNOTICE: '$file' is not a mkv file.\e[0m"
         continue
     fi
     
-    if [[ ! $FORCE == true ]] && [[ $VERIFY == true ]] && [[ $(mediainfo "$file") =~ "ITU-R BS.1770" ]]; then
+    FFPROBEOUT=$(ffprobe -hide_banner -i "$file" 2>&1)
+    if [[ ! $FORCE == true ]] && [[ $VERIFY == true ]] && [[ "$FFPROBEOUT" =~ ITU-R\ BS\.1770 ]]; then
         echo -e "\e[92mNOTICE: Skipping, replaygain tags already exist on file '$file'\e[0m"
         continue
     fi
     
-    tracks=$(bs1770gain -l "$file" 2>&1 | grep -Poi "Stream\s*#\d+:\d+.+?Audio" | grep -Po "\d+:\d+" | cut -d : -f 2)
+    tracks=$(echo "$FFPROBEOUT" | grep -Poi "Stream\s*#\d+:\d+.+?Audio" | grep -Po "\d+:\d+" | cut -d : -f 2)
     if [[ $tracks == "" ]]; then
         echo -e "\e[93mWARNING: Could not get track list for '$file'.\e[0m"
         continue
@@ -116,11 +126,17 @@ while read file; do
     
     fileprocessed=0
     for track in $tracks; do
-
         echo "INFO: Running bs1770gain, this can take a while. (track $track on file '$file')"
-        RGINFO=$(bs1770gain --audio "$track" -rt "$file" | tee /dev/stderr | tr "\r\n" " " | grep -io "analyzing.*ALBUM")
+        if [[ $PEAKTYPE == sample ]]; then
+            echo "INFO: Using sample peak calculation."
+            OUTPUT=$(bs1770gain --loglevel quiet --audio "$track" -rp "$file" 2> /dev/null | tee /dev/stderr)
+        else
+            echo "INFO: Using true peak calculation."
+            OUTPUT=$(bs1770gain --loglevel quiet --audio "$track" -rt "$file" 2> /dev/null | tee /dev/stderr)
+        fi
+        RGINFO=$(echo "$OUTPUT" | tr "\r\n" " " | grep -io "analyzing.*ALBUM")
         TRACKGAIN=$(echo "$RGINFO" | grep -Poi "[-\d.]+\s+LU\s+range" | cut -d\  -f1)
-        TRACKRANGE=$(echo "$RGINFO" | grep -Poi "[-\d.]+\s+LUFS\s+true" | cut -d\  -f1)
+        TRACKRANGE=$(echo "$RGINFO" | grep -Poi "range:\s+[-\d.]+\s+LUFS\s+(true|sample)" | grep -Po "\-?[\d.]+")
         TRACKPEAK=$(echo "$RGINFO" | grep -Poi "[-\d.]+\s+\[ALBUM" | cut -d\  -f1)
         if [[ $TRACKGAIN == "" ]] || [[ $TRACKPEAK == "" ]]; then
             echo -e "\e[92mNOTICE: Problem finding replaygain info from bs1770gain for track $track on file '$file'.\e[0m"
@@ -161,7 +177,7 @@ while read file; do
 
         mkvpropedit --tags track:"$((++track))":"$TMPFILE" "$file"
         
-        if [[ $VERIFY == true ]] && [[ ! $(mediainfo "$file") =~ "ITU-R BS.1770" ]]; then
+        if [[ $VERIFY == true ]] && [[ ! $(ffprobe -hide_banner -i "$file" 2>&1) =~ ITU-R\ BS\.1770 ]]; then
             echo -e "\e[93mWARNING: Replaygain has not been applied for track $track on file '$file'.\e[0m"
             continue
         fi

@@ -30,13 +30,7 @@ cat > /dev/null <<DESCRIPTION
     
     Requires: bs1770gain ffprobe mkvpropedit
     
-    Requires at minimum bs1770gain 0.4.11 (otherwise if the matroska file
-    has multiple audio tracks, it will scan the wrong track for
-    replaygain information, 0.4.11 fixes this issue).
-
-    Note (2023): Works on 0.4.12 also, might work on newer versions, but untested.
-    
-    Change settings below.
+    Requires a modern version of bs1770gain, 0.8.6.1 is tested working, some older versions may or may not function.
     
     examples:
     ./mkvrg                  ; Recursive search in current folder for matroska files.
@@ -44,6 +38,8 @@ cat > /dev/null <<DESCRIPTION
     ./mkvrg Videos/          ; Recursive search in Videos folder for matroska files.
     ./mkvrg test.mkv Videos/ ; Process test.mkv in current folder and recursive
                                   search in Videos folder for matroska files.
+
+    See settings below.
 DESCRIPTION
 
 #########################################################################################
@@ -63,14 +59,17 @@ MINSIZE=${MINSIZE:-"+0"}
 # Type of peak calculation to use.
 # sample : Faster but less accurate.
 # true : Slower but accurate.
-PEAKTYPE=${PEAKTYPE:-"sample"}
+PEAKTYPE=${PEAKTYPE:-"true"}
+
+# Remux .mp4 files to .mkv before scanning for .mkv files.
+REMUX=${REMUX:-true}
 
 #########################################################################################
 #########################################################################################
 #########################################################################################
 
-if [[ ! $PEAKTYPE =~ ^(sample|peak)$ ]]; then
-    echo -e "\e[31mERROR: PEAKTYPE must be either sample or peak.\e[0m"
+if [[ ! $PEAKTYPE =~ ^(sample|true)$ ]]; then
+    echo -e "\e[31mERROR: PEAKTYPE must be either sample or true.\e[0m"
     exit 1
 fi
 
@@ -97,12 +96,28 @@ fi
 trap cleantmp SIGHUP SIGINT SIGQUIT SIGTERM
 
 function cleantmp() {
+    [[ -f $muxinfile && -f $muxoutfile ]] && rm "$muxoutfile"
     rm -f "$TMPFILE"
     if [[ -n $1 ]]; then
         exit "$1"
     fi
     exit 1
 }
+
+if [[ $REMUX == true ]]; then
+    while read -r file; do
+        muxinfile="$(realpath "$file")"
+        muxoutfile=${muxinfile//\.[mM][oO][vV]/.mkv}
+        muxoutfile=${muxoutfile//\.[mM][pP]4/.mkv}
+        if [[ $muxinfile == "$muxoutfile" ]]; then
+            # So cleanTmp() doesn't delete $muxinfile
+            muxoutfile=/tmp/fakeFile
+            continue
+        fi
+        echo "INFO: Remuxing '$muxinfile' to '$muxoutfile'."
+        ffmpeg -y -loglevel error -stats -nostdin -hide_banner -i "$muxinfile" -c copy "$muxoutfile" && rm -f "$muxinfile"
+    done < <(find "$@" -type f -size "$MINSIZE" \( -iname "*.mp4" -o -iname "*.mov" \))
+fi
 
 i=0
 while read -r file; do
@@ -113,7 +128,7 @@ while read -r file; do
     fi
     
     FFPROBEOUT=$(ffprobe -hide_banner -i "$file" 2>&1)
-    if [[ ! $FORCE == true ]] && [[ $VERIFY == true ]] && [[ "$FFPROBEOUT" =~ ITU-R\ BS\.1770 ]]; then
+    if [[ ! $FORCE == true ]] && [[ $VERIFY == true ]] && [[ "$FFPROBEOUT" =~ BS\.1770 ]]; then
         echo -e "\e[92mNOTICE: Skipping, replaygain tags already exist on file '$file'\e[0m"
         continue
     fi
@@ -129,15 +144,14 @@ while read -r file; do
         echo "INFO: Running bs1770gain, this can take a while. (track $track on file '$file')"
         if [[ $PEAKTYPE == sample ]]; then
             echo "INFO: Using sample peak calculation."
-            OUTPUT=$(bs1770gain --loglevel quiet --audio "$track" -rp "$file" 2> /dev/null | tee /dev/stderr)
+            OUTPUT=$(bs1770gain --audio "$track" -rp "$file" | tee /dev/stderr)
         else
             echo "INFO: Using true peak calculation."
-            OUTPUT=$(bs1770gain --loglevel quiet --audio "$track" -rt "$file" 2> /dev/null | tee /dev/stderr)
+            OUTPUT=$(bs1770gain --audio "$track" -rt "$file" | tee /dev/stderr)
         fi
-        RGINFO=$(echo "$OUTPUT" | tr "\r\n" " " | grep -io "analyzing.*ALBUM")
-        TRACKGAIN=$(echo "$RGINFO" | grep -Poi "[-\d.]+\s+LU\s+range" | cut -d\  -f1)
-        TRACKRANGE=$(echo "$RGINFO" | grep -Poi "range:\s+[-\d.]+\s+LUFS\s+(true|sample)" | grep -Po "\-?[\d.]+")
-        TRACKPEAK=$(echo "$RGINFO" | grep -Poi "[-\d.]+\s+\[ALBUM" | cut -d\  -f1)
+        RGINFO=$(echo "$OUTPUT" | tr "\r\n" " " | grep -io "analyzing.*COLLECTION")
+        TRACKGAIN=$(echo "$RGINFO" | grep -Poi "LUFS\s\/\s[-\d.]+" | cut -d\  -f3)
+        TRACKPEAK=$(echo "$RGINFO" | grep -Poi "[-\d.]+\s+amplitude\s+\[COLLECTION" | cut -d\  -f1)
         if [[ $TRACKGAIN == "" ]] || [[ $TRACKPEAK == "" ]]; then
             echo -e "\e[92mNOTICE: Problem finding replaygain info from bs1770gain for track $track on file '$file'.\e[0m"
             continue
@@ -152,19 +166,15 @@ while read -r file; do
     </Targets>
     <Simple>
       <Name>REPLAYGAIN_ALGORITHM</Name>
-      <String>ITU-R BS.1770</String>
+      <String>BS.1770</String>
     </Simple>
     <Simple>
       <Name>REPLAYGAIN_REFERENCE_LOUDNESS</Name>
-      <String>$REFLOUDNESS</String>
+      <String>$REFLOUDNESS LUFS</String>
     </Simple>
     <Simple>
       <Name>REPLAYGAIN_TRACK_GAIN</Name>
       <String>$TRACKGAIN</String>
-    </Simple>
-    <Simple>
-      <Name>REPLAYGAIN_TRACK_RANGE</Name>
-      <String>$TRACKRANGE</String>
     </Simple>
     <Simple>
       <Name>REPLAYGAIN_TRACK_PEAK</Name>
@@ -173,11 +183,11 @@ while read -r file; do
   </Tag>
 </Tags>" > "$TMPFILE"
         
-        echo "INFO: Applying gain ($TRACKGAIN) / true peak ($TRACKPEAK) / range ($TRACKRANGE) for track $track on file '$file'."
+        echo "INFO: Applying gain ($TRACKGAIN), peak ($TRACKPEAK) for track $track on file '$file'."
 
         mkvpropedit --tags track:"$((++track))":"$TMPFILE" "$file"
         
-        if [[ $VERIFY == true ]] && [[ ! $(ffprobe -hide_banner -i "$file" 2>&1) =~ ITU-R\ BS\.1770 ]]; then
+        if [[ $VERIFY == true ]] && [[ ! $(ffprobe -hide_banner -i "$file" 2>&1) =~ BS\.1770 ]]; then
             echo -e "\e[93mWARNING: Replaygain has not been applied for track $track on file '$file'.\e[0m"
             continue
         fi

@@ -143,10 +143,11 @@ while read -r file; do
     for track in $tracks; do
         echo "INFO: Running bs1770gain (using $PEAKTYPE peak calculation), this can take a while. (track $track on file '$file')"
         [[ $PEAKTYPE == sample ]] && PEAK="--sample-peak" || PEAK="--true-peak"
-        OUTPUT=$(bs1770gain --audio "$track" --range "$PEAK" "$file" 2> /dev/null)
-        RGINFO=$(echo "$OUTPUT" | tr "\r\n" " " | grep -io "analyzing.*COLLECTION")
-        TRACKGAIN=$(echo "$RGINFO" | grep -Poi "LUFS\s\/\s[-\d.]+" | cut -d\  -f3)
-        TRACKPEAK=$(echo "$RGINFO" | grep -Poi "[-\d.]+\s+amplitude\s+\[COLLECTION" | cut -d\  -f1)
+        BS_CMD="bs1770gain --audio $track --range $PEAK \"$file\""
+        echo "$BS_CMD"
+        OUTPUT=$(eval "$BS_CMD" 2> /dev/null | tr "\r\n" " " | grep -io "analyzing.*COLLECTION")
+        TRACKGAIN=$(echo "$OUTPUT" | grep -Poi "LUFS\s\/\s[-\d.]+" | cut -d\  -f3)
+        TRACKPEAK=$(echo "$OUTPUT" | grep -Poi "[-\d.]+\s+amplitude\s+\[COLLECTION" | cut -d\  -f1)
         if [[ $TRACKGAIN == "" ]] || [[ $TRACKPEAK == "" ]]; then
             echo -e "\e[92mNOTICE: Problem finding replaygain info from bs1770gain for track $track on file '$file'.\e[0m"
             continue

@@ -141,14 +141,9 @@ while read -r file; do
     
     fileprocessed=0
     for track in $tracks; do
-        echo "INFO: Running bs1770gain, this can take a while. (track $track on file '$file')"
-        if [[ $PEAKTYPE == sample ]]; then
-            echo "INFO: Using sample peak calculation."
-            OUTPUT=$(bs1770gain --audio "$track" -rp "$file" | tee /dev/stderr)
-        else
-            echo "INFO: Using true peak calculation."
-            OUTPUT=$(bs1770gain --audio "$track" -rt "$file" | tee /dev/stderr)
-        fi
+        echo "INFO: Running bs1770gain (using $PEAKTYPE peak calculation), this can take a while. (track $track on file '$file')"
+        [[ $PEAKTYPE == sample ]] && PEAK="--sample-peak" || PEAK="--true-peak"
+        OUTPUT=$(bs1770gain --audio "$track" --range "$PEAK" "$file" 2> /dev/null)
         RGINFO=$(echo "$OUTPUT" | tr "\r\n" " " | grep -io "analyzing.*COLLECTION")
         TRACKGAIN=$(echo "$RGINFO" | grep -Poi "LUFS\s\/\s[-\d.]+" | cut -d\  -f3)
         TRACKPEAK=$(echo "$RGINFO" | grep -Poi "[-\d.]+\s+amplitude\s+\[COLLECTION" | cut -d\  -f1)

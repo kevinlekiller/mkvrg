@@ -152,7 +152,7 @@ while read -r file; do
     for track in $tracks; do
         ffmpegTrack=$((track-1))
         echo "INFO: Running ffmpeg (using $PEAKTYPE peak calculation), this can take a while. (track $track on file '$file')"
-        FFMPEG_CMD="$FFMPEG -loglevel info -nostats -nostdin -hide_banner -i \"$file\" -map 0:a -filter_complex \"[0:a:$ffmpegTrack]ebur128=peak=true:scale=relative:framelog=quiet\" -f null -"
+        FFMPEG_CMD="$FFMPEG -loglevel info -nostats -nostdin -hide_banner -i \"$file\" -map 0:a -filter_complex \"[0:a:$ffmpegTrack]ebur128=peak=$PEAKTYPE:framelog=quiet\" -f null -"
         echo "$FFMPEG_CMD"
         FFMPEG_OUT=$(eval "$FFMPEG_CMD" 2>&1 | tr "\n" " " | sed "s/.*Parsed_ebur128//" | sed "s/ \+/ /g")
         TRACKGAIN=$(echo "$FFMPEG_OUT" | grep -Po " I: -?[\d.]+ LUFS" | cut -d\  -f3)

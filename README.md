@@ -25,3 +25,7 @@ Process test.mkv in current folder and recursive search in Videos folder for mat
 Process test.mkv but only if it has no tags yet and its size is at least 100 MB.
 
 `VERIFY=true FORCE=false MINSIZE=+100M ./mkvrg`
+
+## mkvrg_deprecated_do_not_use.py
+
+This python script is outdated, use mkvrg instead.

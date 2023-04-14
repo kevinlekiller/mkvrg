@@ -21,16 +21,14 @@ cat > /dev/null <<LICENSE
 LICENSE
 
 cat > /dev/null <<DESCRIPTION
-    Bash script for analyzing audio tracks in matroska files with BS1770GAIN and
+    Bash script for analyzing audio tracks in matroska files with ffmpeg and
     applying replaygain (EBU r128) track and sample peak information
     with mkvpropedit, this avoids remuxing the matroksa file.
     Pass list of files or a directory to scan files, if you pass a
     directory it will recursively search in it for files.
     It will only work on files with these extensions: "mkv, mka, mk3d".
     
-    Requires: bs1770gain ffprobe mkvpropedit
-    
-    Requires a modern version of bs1770gain, 0.8.6.1 is tested working, some older versions may or may not function.
+    Requires: ffmpeg ffprobe mkvpropedit
     
     examples:
     ./mkvrg                  ; Recursive search in current folder for matroska files.
@@ -64,6 +62,11 @@ PEAKTYPE=${PEAKTYPE:-"true"}
 # Remux .mp4 files to .mkv before scanning for .mkv files.
 REMUX=${REMUX:-true}
 
+# Which ffmpeg executable to use.
+# Set to ffmpeg to automatically find.
+# Set to a full path to use a different ffmpeg executable.
+FFMPEG=${FFMPEG:-"ffmpeg"}
+
 #########################################################################################
 #########################################################################################
 #########################################################################################
@@ -73,19 +76,18 @@ if [[ ! $PEAKTYPE =~ ^(sample|true)$ ]]; then
     exit 1
 fi
 
-REQPROGS="bs1770gain ffprobe file find grep mkvpropedit tr"
+if ! which "$FFMPEG" &> /dev/null; then
+    echo -e "\e[31mERROR: Unable to find the ffmpeg executable.\e[0m"
+    exit 1
+fi
+
+REQPROGS="ffmpeg ffprobe file find grep mkvpropedit tr"
 for PROG in $REQPROGS; do
     if ! which "$PROG" &> /dev/null; then
         echo -e "\e[31mERROR: This program is required: $PROG\e[0m"
         exit 1
     fi
 done
-
-REFLOUDNESS=$(bs1770gain --help 2>&1 | grep -Poi "[-\d.]+\s*LUFS,?\s*default" | cut -d\  -f1)
-if [[ $REFLOUDNESS == "" ]]; then
-    echo -e "\e[31mERROR: Could not find default replaygain reference loudness from bs1770gain.\e[0m"
-    exit 1
-fi
 
 TMPFILE="$(mktemp)"
 if [[ ! -f $TMPFILE ]] || [[ ! -w $TMPFILE ]]; then
@@ -104,6 +106,10 @@ function cleantmp() {
     exit 1
 }
 
+function dBtoAmplitude() {
+    awk "BEGIN{print 10^($1/20)}"
+}
+
 if [[ $REMUX == true ]]; then
     while read -r file; do
         muxinfile="$(realpath "$file")"
@@ -115,9 +121,12 @@ if [[ $REMUX == true ]]; then
             continue
         fi
         echo "INFO: Remuxing '$muxinfile' to '$muxoutfile'."
-        ffmpeg -y -loglevel error -stats -nostdin -hide_banner -i "$muxinfile" -c copy "$muxoutfile" && rm -f "$muxinfile"
+        "$FFMPEG" -y -loglevel error -stats -nostdin -hide_banner -i "$muxinfile" -c copy "$muxoutfile" && rm -f "$muxinfile"
     done < <(find "$@" -type f -size "$MINSIZE" \( -iname "*.mp4" -o -iname "*.mov" \))
 fi
+
+# https://wiki.hydrogenaud.io/index.php?title=ReplayGain_2.0_specification
+# https://ffmpeg.org/ffmpeg-filters.html#ebur128
 
 i=0
 while read -r file; do
@@ -141,15 +150,16 @@ while read -r file; do
     
     fileprocessed=0
     for track in $tracks; do
-        echo "INFO: Running bs1770gain (using $PEAKTYPE peak calculation), this can take a while. (track $track on file '$file')"
-        [[ $PEAKTYPE == sample ]] && PEAK="--sample-peak" || PEAK="--true-peak"
-        BS_CMD="bs1770gain --audio $track --range $PEAK \"$file\""
-        echo "$BS_CMD"
-        OUTPUT=$(eval "$BS_CMD" 2> /dev/null | tr "\r\n" " " | grep -io "analyzing.*COLLECTION")
-        TRACKGAIN=$(echo "$OUTPUT" | grep -Poi "LUFS\s\/\s[-\d.]+" | cut -d\  -f3)
-        TRACKPEAK=$(echo "$OUTPUT" | grep -Poi "[-\d.]+\s+amplitude\s+\[COLLECTION" | cut -d\  -f1)
+        ffmpegTrack=$((track-1))
+        echo "INFO: Running ffmpeg (using $PEAKTYPE peak calculation), this can take a while. (track $track on file '$file')"
+        FFMPEG_CMD="$FFMPEG -loglevel info -nostats -nostdin -hide_banner -i \"$file\" -map 0:a -filter_complex \"[0:a:$ffmpegTrack]ebur128=peak=true:scale=relative:framelog=quiet\" -f null -"
+        echo "$FFMPEG_CMD"
+        FFMPEG_OUT=$(eval "$FFMPEG_CMD" 2>&1 | tr "\n" " " | sed "s/.*Parsed_ebur128//" | sed "s/ \+/ /g")
+        TRACKGAIN=$(echo "$FFMPEG_OUT" | grep -Po " I: -?[\d.]+ LUFS" | cut -d\  -f3)
+        TRACKPEAK=$(echo "$FFMPEG_OUT" | grep -Po " Peak: -?[\d.]+ dBFS" | cut -d\  -f3)
+        TRACKPEAK=$(dBtoAmplitude "$TRACKPEAK")
         if [[ $TRACKGAIN == "" ]] || [[ $TRACKPEAK == "" ]]; then
-            echo -e "\e[92mNOTICE: Problem finding replaygain info from bs1770gain for track $track on file '$file'.\e[0m"
+            echo -e "\e[92mNOTICE: Problem finding replaygain info from ffmpeg for track $track on file '$file'.\e[0m"
             continue
         fi
         
@@ -166,11 +176,11 @@ while read -r file; do
     </Simple>
     <Simple>
       <Name>REPLAYGAIN_REFERENCE_LOUDNESS</Name>
-      <String>$REFLOUDNESS LUFS</String>
+      <String>-23.0 LUFS</String>
     </Simple>
     <Simple>
       <Name>REPLAYGAIN_TRACK_GAIN</Name>
-      <String>$TRACKGAIN</String>
+      <String>$TRACKGAIN dB</String>
     </Simple>
     <Simple>
       <Name>REPLAYGAIN_TRACK_PEAK</Name>
@@ -179,7 +189,7 @@ while read -r file; do
   </Tag>
 </Tags>" > "$TMPFILE"
         
-        echo "INFO: Applying gain ($TRACKGAIN), peak ($TRACKPEAK) for track $track on file '$file'."
+        echo "INFO: Applying gain ($TRACKGAIN LUFS), peak ($TRACKPEAK amplitude)for track $track on file '$file'."
 
         mkvpropedit --tags track:"$((++track))":"$TMPFILE" "$file"
         

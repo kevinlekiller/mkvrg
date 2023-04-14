@@ -81,7 +81,7 @@ if ! which "$FFMPEG" &> /dev/null; then
     exit 1
 fi
 
-REQPROGS="ffmpeg ffprobe file find grep mkvpropedit tr"
+REQPROGS="ffprobe file find grep mkvpropedit tr"
 for PROG in $REQPROGS; do
     if ! which "$PROG" &> /dev/null; then
         echo -e "\e[31mERROR: This program is required: $PROG\e[0m"
@@ -189,7 +189,7 @@ while read -r file; do
   </Tag>
 </Tags>" > "$TMPFILE"
         
-        echo "INFO: Applying gain ($TRACKGAIN LUFS), peak ($TRACKPEAK amplitude)for track $track on file '$file'."
+        echo "INFO: Applying gain ($TRACKGAIN LUFS), peak ($TRACKPEAK amplitude) for track $track on file '$file'."
 
         mkvpropedit --tags track:"$((++track))":"$TMPFILE" "$file"
         

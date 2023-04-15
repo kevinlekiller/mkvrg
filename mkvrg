@@ -95,6 +95,9 @@ if [[ ! -f $TMPFILE ]] || [[ ! -w $TMPFILE ]]; then
     exit 1
 fi
 
+REFLOUDNESS="-23.0"
+REFLOUDNESSINT=$(REFLOUDNESS//\.[0-9]*/)
+
 trap cleantmp SIGHUP SIGINT SIGQUIT SIGTERM
 
 function cleantmp() {
@@ -107,7 +110,7 @@ function cleantmp() {
 }
 
 function lufsToLu() {
-    awk "BEGIN{print (-23.0 - $1)}"
+    awk "BEGIN{print ($REFLOUDNESS - $1)}"
 }
 
 function dBtoAmplitude() {
@@ -156,7 +159,7 @@ while read -r file; do
     for track in $tracks; do
         ffmpegTrack=$((track-1))
         echo "INFO: Running ffmpeg (using $PEAKTYPE peak calculation), this can take a while. (track $track on file '$file')"
-        FFMPEG_CMD="$FFMPEG -loglevel info -nostats -nostdin -hide_banner -i \"$file\" -map 0:a -filter_complex \"[0:a:$ffmpegTrack]ebur128=peak=$PEAKTYPE:framelog=quiet\" -f null -"
+        FFMPEG_CMD="$FFMPEG -loglevel info -nostats -nostdin -hide_banner -i \"$file\" -map 0:a -filter_complex \"[0:a:$ffmpegTrack]ebur128=peak=$PEAKTYPE:framelog=quiet:target=$REFLOUDNESSINT\" -f null -"
         echo "$FFMPEG_CMD"
         FFMPEG_OUT=$(eval "$FFMPEG_CMD" 2>&1 | tr "\n" " " | sed "s/^.*\(Parsed_ebur128.*$\)/\1/" | sed "s/ \+/ /g")
         echo $FFMPEG_OUT
@@ -182,7 +185,7 @@ while read -r file; do
     </Simple>
     <Simple>
       <Name>REPLAYGAIN_REFERENCE_LOUDNESS</Name>
-      <String>-23.0 LUFS</String>
+      <String>$REFLOUDNESS LUFS</String>
     </Simple>
     <Simple>
       <Name>REPLAYGAIN_TRACK_GAIN</Name>

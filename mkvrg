@@ -54,7 +54,7 @@ FORCE=${FORCE:-false}
 # For example, set to +50M to ignore files under 50MB.
 MINSIZE=${MINSIZE:-"+0"}
 
-# Remux .mp4 files to .mkv before scanning for .mkv files.
+# Remux .mp4 and .mov files to .mkv before scanning for .mkv files.
 REMUX=${REMUX:-true}
 
 # Which ffmpeg executable to use.

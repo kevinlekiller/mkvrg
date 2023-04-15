@@ -85,14 +85,14 @@ if [[ ! $PEAKTYPE =~ ^(sample|true)$ ]]; then
     exit 1
 fi
 
-if ! which "$FFMPEG" &> /dev/null; then
+if ! command -v "$FFMPEG" &> /dev/null; then
     echo -e "\e[31mERROR: Unable to find the ffmpeg executable.\e[0m"
     exit 1
 fi
 
 reqProgs="awk file find grep mkvpropedit mktemp sed"
 for reqProg in $reqProgs; do
-    if ! which "$reqProg" &> /dev/null; then
+    if ! command -v "$reqProg" &> /dev/null; then
         echo -e "\e[31mERROR: This program could not be found: $reqProg\e[0m"
         exit 1
     fi

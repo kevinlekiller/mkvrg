@@ -175,7 +175,8 @@ while read -r file; do
         echo "$ffmpegOut"
         trackGain=$(lufsTodB "$(echo "$ffmpegOut" | grep -Po " I: -?[\d.]+ LUFS" | cut -d\  -f3)")
         trackPeak=$(dBtoAmplitude "$(echo "$ffmpegOut" | grep -Po " Peak: -?[\d.]+ dBFS" | cut -d\  -f3)")
-        if [[ $trackGain == "" ]] || [[ $trackPeak == "" ]]; then
+        trackRange=$(printf "%0.2f" "$(echo "$ffmpegOut" | grep -Po " Loudness range: LRA: -?[\d.]+ LU" | cut -d\  -f5)")
+        if [[ $trackGain == "" || $trackPeak == "" || $trackRange == "" ]]; then
             echo -e "\e[92mNOTICE: Problem finding $rgAlgo info from ffmpeg for track $track on file '$file'.\e[0m"
             continue
         fi
@@ -202,10 +203,14 @@ while read -r file; do
                         <Name>REPLAYGAIN_TRACK_PEAK</Name>
                         <String>$trackPeak</String>
                     </Simple>
+                    <Simple>
+                        <Name>REPLAYGAIN_TRACK_RANGE</Name>
+                        <String>$trackRange dB</String>
+                    </Simple>
                 </Tag>
             </Tags>" | sed "s/^            //g" > "$tmpFile"
 
-        echo "INFO: Applying gain ($trackGain dB), peak ($trackPeak amplitude) for track $track on file '$file'."
+        echo "INFO: Applying gain ($trackGain dB), peak ($trackPeak amplitude), range ($trackRange dB) for track $track on file '$file'."
         mkvpropedit --tags track:"$((++track))":"$tmpFile" "$file"
         if [[ $VERIFY == true ]] && [[ ! $("$FFMPEG" -nostdin -hide_banner -i "$file" 2>&1) =~ ${rgAlgo} ]]; then
             echo -e "\e[93mWARNING: Replaygain has not been applied for track $track on file '$file'.\e[0m"

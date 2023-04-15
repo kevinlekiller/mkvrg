@@ -96,7 +96,7 @@ if [[ ! -f $TMPFILE ]] || [[ ! -w $TMPFILE ]]; then
 fi
 
 REFLOUDNESS="-23.0"
-REFLOUDNESSINT=$(REFLOUDNESS//\.[0-9]*/)
+REFLOUDNESSINT=${REFLOUDNESS//\.[0-9]*/}
 
 trap cleantmp SIGHUP SIGINT SIGQUIT SIGTERM
 
@@ -162,7 +162,7 @@ while read -r file; do
         FFMPEG_CMD="$FFMPEG -loglevel info -nostats -nostdin -hide_banner -i \"$file\" -map 0:a -filter_complex \"[0:a:$ffmpegTrack]ebur128=peak=$PEAKTYPE:framelog=quiet:target=$REFLOUDNESSINT\" -f null -"
         echo "$FFMPEG_CMD"
         FFMPEG_OUT=$(eval "$FFMPEG_CMD" 2>&1 | tr "\n" " " | sed "s/^.*\(Parsed_ebur128.*$\)/\1/" | sed "s/ \+/ /g")
-        echo $FFMPEG_OUT
+        echo "$FFMPEG_OUT"
         TRACKGAIN=$(echo "$FFMPEG_OUT" | grep -Po " I: -?[\d.]+ LUFS" | cut -d\  -f3)
         TRACKGAIN=$(lufsToLu "$TRACKGAIN")
         TRACKPEAK=$(echo "$FFMPEG_OUT" | grep -Po " Peak: -?[\d.]+ dBFS" | cut -d\  -f3)

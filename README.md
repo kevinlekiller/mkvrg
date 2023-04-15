@@ -1,11 +1,15 @@
 # mkvrg
-Apply replaygain to matroska files without remuxing.
+Apply EBU R128 (using ffmpeg) replaygain tags to matroska files without remuxing (using mkvtoolnix).
 
-Bash script for analyzing audio tracks in matroska files with ffmpeg and applying replaygain (EBU r128) gain/peak information with mkvpropedit.
-Pass list of files or a directory to scan files, if you pass a directory they will recursively search in it for files.
-They will only work on files with these extensions: "mkv, mka, mk3d".
+Bash script for analyzing audio tracks in matroska files with ffmpeg and applying replaygain (EBU r128) gain and peak information with mkvpropedit, this avoids remuxing the matroksa file.
 
-Requires: ffmpeg, ffprobe, mkvpropedit
+Pass list of files or a directory to scan files, if you pass a directory it will recursively search in it for files.
+
+It will only work on files with these extensions: "mkv, mka, mk3d".
+
+There is a setting to automatically remux mp4 and mov files to mkv before processing with EBU R128.
+
+Requires: ffmpeg, mkvpropedit
 
 Change settings inside the script. You can also set environment variables to change settings on a per call basis.
 
@@ -22,9 +26,9 @@ Recursive search in Videos folder for matroska files.
 Process test.mkv in current folder and recursive search in Videos folder for matroska files.  
 `./mkvrg test.mkv Videos/`
 
-Process test.mkv but only if it has no tags yet and its size is at least 100 MB.
+Process test.mkv even if it already has replaygain tags and its size is at least 100 MB.
 
-`VERIFY=true FORCE=false MINSIZE=+100M ./mkvrg`
+`FORCE=true MINSIZE=+100M ./mkvrg test.mkv`
 
 ## mkvrg_deprecated_do_not_use.py
 

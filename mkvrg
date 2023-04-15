@@ -106,6 +106,10 @@ function cleantmp() {
     exit 1
 }
 
+function lufsToLu() {
+    awk "BEGIN{print (-23.0 - $1)}"
+}
+
 function dBtoAmplitude() {
     awk "BEGIN{print 10^($1/20)}"
 }
@@ -154,8 +158,10 @@ while read -r file; do
         echo "INFO: Running ffmpeg (using $PEAKTYPE peak calculation), this can take a while. (track $track on file '$file')"
         FFMPEG_CMD="$FFMPEG -loglevel info -nostats -nostdin -hide_banner -i \"$file\" -map 0:a -filter_complex \"[0:a:$ffmpegTrack]ebur128=peak=$PEAKTYPE:framelog=quiet\" -f null -"
         echo "$FFMPEG_CMD"
-        FFMPEG_OUT=$(eval "$FFMPEG_CMD" 2>&1 | tr "\n" " " | sed "s/.*Parsed_ebur128//" | sed "s/ \+/ /g")
+        FFMPEG_OUT=$(eval "$FFMPEG_CMD" 2>&1 | tr "\n" " " | sed "s/^.*\(Parsed_ebur128.*$\)/\1/" | sed "s/ \+/ /g")
+        echo $FFMPEG_OUT
         TRACKGAIN=$(echo "$FFMPEG_OUT" | grep -Po " I: -?[\d.]+ LUFS" | cut -d\  -f3)
+        TRACKGAIN=$(lufsToLu "$TRACKGAIN")
         TRACKPEAK=$(echo "$FFMPEG_OUT" | grep -Po " Peak: -?[\d.]+ dBFS" | cut -d\  -f3)
         TRACKPEAK=$(dBtoAmplitude "$TRACKPEAK")
         if [[ $TRACKGAIN == "" ]] || [[ $TRACKPEAK == "" ]]; then
@@ -189,7 +195,7 @@ while read -r file; do
   </Tag>
 </Tags>" > "$TMPFILE"
         
-        echo "INFO: Applying gain ($TRACKGAIN LUFS), peak ($TRACKPEAK amplitude) for track $track on file '$file'."
+        echo "INFO: Applying gain ($TRACKGAIN LU), peak ($TRACKPEAK amplitude) for track $track on file '$file'."
 
         mkvpropedit --tags track:"$((++track))":"$TMPFILE" "$file"
         

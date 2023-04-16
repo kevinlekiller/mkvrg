@@ -20,19 +20,26 @@ cat > /dev/null <<LICENSE
     https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html
 LICENSE
 
-cat > /dev/null <<DESCRIPTION
+read -rd '' DESCRIPTION <<DESCRIPTION
+    mkvrg - Apply replaygain tags to matroska files without remuxing (gain is calculated using ffmpeg and tags are applied using mkvpropedit).
+
     Bash script for analyzing audio tracks in matroska files with ffmpeg and
-    applying replaygain gain and peak information
-    with mkvpropedit, this avoids remuxing the matroksa file.
+    applying replaygain gain and peak information  with mkvpropedit, this avoids remuxing the matroksa file.
+    
     With mpv, you can add replaygain=track to mpv.conf to enable replaygain tag parsing.
+    
     With VLC, you can enable replaygain by clicking Tools -> Preferences -> Audio -> Replay gain mode.
-    Pass list of files or a directory to scan files, if you pass a
-    directory it will recursively search in it for files.
-    It will only work on files with these extensions: "mkv, mka, mk3d".
-    The default alrogrithm used for calculating gain and peak is ffmpeg's ebur128,
-    this can be changed below.
+    
+    Pass list of files or a directory to scan files, if you pass a directory it will recursively search in it for files.
+    
+    It will only process files with these extensions: "mkv, mka, mk3d".
+    
+    The default alrogrithm used for calculating gain and peak is ffmpeg's ebur128, this can be changed with the FFMPEGFILTER env variable.
+
     Requires: ffmpeg mkvpropedit
+
     examples:
+    ./mkrvg --help                ; Shows this and exits.
     ./mkvrg                       ; Recursive search in current folder for matroska files.
     ./mkvrg test.mkv              ; Process test.mkv in current folder.
     ./mkvrg Videos/               ; Recursive search in Videos folder for matroska files.
@@ -42,65 +49,77 @@ cat > /dev/null <<DESCRIPTION
     MINSIZE=+100M ./mkvrg         ; Recursive search in current folder for matroska
                                     files larger than 100MiB.
     FFMPEGFILTER=loudnorm ./mkvrg ; Use loudnorm ffmpeg filter to scan found files.
-    See settings below.
 DESCRIPTION
-
+read -rd '' VARIABLES <<VARIABLES
+    Environment Variables:
+    VERIFY=[true|false]  -> Check if the file already has tags or if tags were written succesfully.
+                            Defaults to VERIFY=true
+    FORCE=[true|false]   -> Force mkvrg to process matroska files, even if they already have replaygain tags.
+                            If VERIFY=false, files will always be processed.
+                            Defaults to FORCE=false
+    MINSIZE=+[0-9][KMBG] -> Minimum matroska file size to work on.
+                            Set to MINSIZE=+0 to disable.
+                            For example, set MINSIZE=+50M to ignore files under 50MB.
+                            Defaults to MINSIZE=+0
+    REMUX=[true|false]   -> Remux .mp4 and .mov files to .mkv before scanning for .mkv files.
+                            Defaults to REMUX=false
+    FFMPEG=[path]        ->  Which ffmpeg executable to use.
+                            Set to FFMPEG=ffmpeg to use the one in PATH.
+                            For example, set to FFMPEG=/home/user/ffmpeg/ffmpeg
+                            Defaults to FFMPEG=ffmpeg
+    FFMPEGFILTER=        ->
+        [ebur128|loudnorm|replaygain]
+                            Which ffmpeg filter to use for scanning the audio.
+                            Each filter calculates the gain/peak differently.
+                            Lower reference loudness = quieter output (replaygain will be louder than ebur128 for example).
+                            Faster speed = less time it takes to scan the audio.
+                            replaygain: Speed:               Fast.      Roughly 10x faster than loudnorm.
+                                        Reference loudness: -18.00 LUFS
+                            ebur128:    Speed:               Normal.    Roughly 5x faster than loudnorm.
+                                                                        Note: This is with true peak calculation, which is slower.
+                                        Reference loudness: -23.00 LUFS
+                            loudnorm:   Speed:               Slow.
+                                        Reference loudness: -24.00 LUFS
+                            Defaults to FFMPEGFILTER=ebur128
+    PEAKTYPE=            ->
+         [true|sample]
+                            Type of peak calculation to use.
+                            Note: Only used for ebur128 filter.
+                            sample : Faster but less accurate. Varies from file to file, but can be up to 2x faster in testing.
+                            true : Slower but accurate.
+                            Defaults to PEAKTYPE=true
+    LOUDNESSOFFSET=
+          [+-]0.0        -> Affects the calculation of LUFS to dB, which affects how loud or quiet the audio will be.
+                            Adding a positive number will make the audio louder, adding a negative number will make it quieter.
+                            For example, the reference loudness of ebur128 is -23.00, if we set LOUDNESSOFFSET=5.00, the gain
+                            will be roughly the same as what the replaygain  (-18.00 reference) filter will calculate.
+                            Note: This only affects ebur128 and loudnorm filters.
+                            Disable by setting LOUDNESSOFFSET=0.0
+                            Defaults to LOUDNESSOFFSET=0.0
+    PREVIEW=[true|false] -> If set to true, no files will be modified, values will be displayed on the console.
+                            Defaults to PREVIEW=false
+VARIABLES
 #########################################################################################
-##################################### Settings ##########################################
+##################################### ENV VARS ##########################################
 #########################################################################################
-
-# Check if the file already has tags or if tags were written succesfully.
 VERIFY=${VERIFY:-true}
-
-# Force mkvrg to process matroska files, even if they already have replaygain tags. (ignored if VERIFY is false)
 FORCE=${FORCE:-false}
-
-# Minimum matroska file size to work on. change to +0 to ignore.
-# For example, set to +50M to ignore files under 50MB.
 MINSIZE=${MINSIZE:-"+0"}
-
-# Remux .mp4 and .mov files to .mkv before scanning for .mkv files.
 REMUX=${REMUX:-false}
-
-# Which ffmpeg executable to use.
-# Set to ffmpeg to automatically find.
-# Set to a full path to use a different ffmpeg executable.
 FFMPEG=${FFMPEG:-"ffmpeg"}
-
-# Which ffmpeg filter to use for scanning the audio.
-# Each filter calculates the gain/peak differently.
-# Lower reference loudness = quieter output (replaygain will be louder than ebur128 for example).
-# Faster speed = less time it takes to scan the audio.
-# Default: ebur128
-# replaygain: Speed:               Fast.      Roughly 10x faster than loudnorm.
-#             Reference loudness: -18.00 LUFS
-# ebur128:    Speed:               Normal.    Roughly 5x faster than loudnorm.
-#                                             Note: This is with true peak calculation, which is slower.
-#             Reference loudness: -23.00 LUFS
-# loudnorm:   Speed:               Slow.
-#             Reference loudness: -24.00 LUFS
 FFMPEGFILTER=${FFMPEGFILTER:-"ebur128"}
-
-# Type of peak calculation to use.
-# Note: Only used for ebur128 filter.
-# sample : Faster but less accurate. Varies from file to file, but can be up to 2x faster in testing.
-# true : Slower but accurate.
-# Default: true
 PEAKTYPE=${PEAKTYPE:-"true"}
-
-# This setting affects the calculation of LUFS to dB, which affects how loud or quiet the audio will be.
-# Adding a positive number will make the audio louder, adding a negative number will make it quieter.
-# For example, the reference loudness of ebur128 is -23.00, if we set this to 5.00, the gain will be
-#   roughly the same as what the replaygain filter will calculate (-18.00).
-# Note: This only affects ebur128 and loudnorm filters.
 LOUDNESSOFFSET=${LOUDNESSOFFSET:-"0.00"}
-
-# Setting this to true will not modify any files.
 PREVIEW=${PREVIEW:-false}
+#########################################################################################
+################################### ENV VARS End ########################################
+#########################################################################################
 
-#########################################################################################
-################################### Settings End ########################################
-#########################################################################################
+if [[ $1 == "--help" || $1 == "-h" ]]; then
+    echo "$DESCRIPTION"
+    echo "$VARIABLES"
+    exit 0
+fi
 
 if [[ ! $FFMPEGFILTER =~ ^(ebur128|loudnorm|replaygain)$ ]]; then
     echo -e "\e[31mERROR: Invalid FFMPEGFILTER.\e[0m" > /dev/stderr

@@ -1,13 +1,13 @@
 # mkvrg
-Apply EBU R128 (using ffmpeg) replaygain tags to matroska files without remuxing (using mkvtoolnix).
+Apply replaygain tags to matroska files without remuxing (gain is calculated using ffmpeg and tags are applied using mkvtoolnix).
 
-Bash script for analyzing audio tracks in matroska files with ffmpeg and applying replaygain (EBU r128) gain and peak information with mkvpropedit, this avoids remuxing the matroksa file.
+Bash script for analyzing audio track loudness in matroska files with ffmpeg and applying replaygain gain and peak tags with mkvpropedit, this avoids remuxing the matroksa file.
 
 Pass list of files or a directory to scan files, if you pass a directory it will recursively search in it for files.
 
 It will only work on files with these extensions: "mkv, mka, mk3d".
 
-There is a setting to automatically remux mp4 and mov files to mkv before processing with EBU R128.
+There is a setting to automatically remux mp4 and mov files to mkv.
 
 Requires: ffmpeg, mkvpropedit
 

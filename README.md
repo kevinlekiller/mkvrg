@@ -1,7 +1,7 @@
 # mkvrg
 Apply replaygain tags to matroska files without remuxing (gain is calculated using ffmpeg and tags are applied using mkvtoolnix).
 
-Bash script for analyzing audio track loudness in matroska files with [ffmpeg](https://ffmpeg.org/) and applying [replaygain](https://wiki.hydrogenaud.io/index.php?title=ReplayGain_2.0_specification) gain and peak tags with [mkvpropedit](https://mkvtoolnix.download/), this avoids remuxing the matroksa file. With [mpv](https://mpv.io/), you can add [replaygain=track](https://mpv.io/manual/stable/#options-replaygain) to [mpv.conf](https://mpv.io/manual/stable/#files) to enable replaygain tag parsing.
+Bash script for analyzing audio track loudness in matroska files with [ffmpeg](https://ffmpeg.org/) and applying [replaygain](https://wiki.hydrogenaud.io/index.php?title=ReplayGain_2.0_specification) gain and peak tags with [mkvpropedit](https://mkvtoolnix.download/), this avoids remuxing the matroksa file. With [mpv](https://mpv.io/), you can add [replaygain=track](https://mpv.io/manual/stable/#options-replaygain) to [mpv.conf](https://mpv.io/manual/stable/#files) to enable replaygain tag parsing. With [VLC](https://www.videolan.org/vlc/), you can enable replaygain by clicking `Tools -> Preferences -> Audio -> Replay gain mode`.
 
 Pass list of files or a directory to scan files, if you pass a directory it will recursively search in it for files.
 

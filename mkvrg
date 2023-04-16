@@ -1,5 +1,4 @@
 #!/bin/bash
-
 cat > /dev/null <<LICENSE
     Copyright (C) 2016,2023  kevinlekiller
     Copyright (C) 2016  WhitePeter
@@ -19,21 +18,20 @@ cat > /dev/null <<LICENSE
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
     https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html
 LICENSE
-
 read -rd '' DESCRIPTION <<DESCRIPTION
     mkvrg - Apply replaygain tags to matroska files without remuxing (gain is calculated using ffmpeg and tags are applied using mkvpropedit).
 
     Bash script for analyzing audio tracks in matroska files with ffmpeg and
     applying replaygain gain and peak information  with mkvpropedit, this avoids remuxing the matroksa file.
-    
+
     With mpv, you can add replaygain=track to mpv.conf to enable replaygain tag parsing.
-    
+
     With VLC, you can enable replaygain by clicking Tools -> Preferences -> Audio -> Replay gain mode.
-    
+
     Pass list of files or a directory to scan files, if you pass a directory it will recursively search in it for files.
-    
+
     It will only process files with these extensions: "mkv, mka, mk3d".
-    
+
     The default alrogrithm used for calculating gain and peak is ffmpeg's ebur128, this can be changed with the FFMPEGFILTER env variable.
 
     Requires: ffmpeg mkvpropedit
@@ -120,6 +118,7 @@ if [[ $1 == "--help" || $1 == "-h" ]]; then
     echo "$VARIABLES"
     exit 0
 fi
+unset DESCRIPTION VARIABLES
 
 if [[ ! $FFMPEGFILTER =~ ^(ebur128|loudnorm|replaygain)$ ]]; then
     echo -e "\e[31mERROR: Invalid FFMPEGFILTER.\e[0m" > /dev/stderr

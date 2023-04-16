@@ -29,12 +29,9 @@ cat > /dev/null <<DESCRIPTION
     Pass list of files or a directory to scan files, if you pass a
     directory it will recursively search in it for files.
     It will only work on files with these extensions: "mkv, mka, mk3d".
-
     The default alrogrithm used for calculating gain and peak is ffmpeg's ebur128,
     this can be changed below.
-
     Requires: ffmpeg mkvpropedit
-
     examples:
     ./mkvrg                       ; Recursive search in current folder for matroska files.
     ./mkvrg test.mkv              ; Process test.mkv in current folder.
@@ -45,7 +42,6 @@ cat > /dev/null <<DESCRIPTION
     MINSIZE=+100M ./mkvrg         ; Recursive search in current folder for matroska
                                     files larger than 100MiB.
     FFMPEGFILTER=loudnorm ./mkvrg ; Use loudnorm ffmpeg filter to scan found files.
-
     See settings below.
 DESCRIPTION
 
@@ -157,8 +153,16 @@ function lufsTodB() {
     printf "%0.2f" "$(awk "BEGIN{print ($REFLOUDNESS - $1)}")"
 }
 
+function dBToLufs() {
+    lufsTodB "$1"
+}
+
 function dBtoAmplitude() {
     printf "%06f" "$(awk "BEGIN{print 10^($1/20)}")"
+}
+
+function amplitudeToDB() {
+    printf "%0.2f" "$(awk "BEGIN{print 20*log($1)/log(10)}")"
 }
 
 if [[ $PREVIEW == false && $REMUX == true ]]; then
@@ -235,7 +239,7 @@ while read -r file; do
             continue
         fi
 
-        echo "INFO: Found: Gain ($trackGain dB), peak ($trackPeak amplitude) for track $track on file '$file'."
+        echo "INFO: Found: Gain ($trackGain dB | $(dBToLufs $trackGain) LUFS), peak ($trackPeak amplitude | $(amplitudeToDB $trackPeak) dB) for track $track on file '$file'."
         if [[ $PREVIEW == true ]]; then
             echo "INFO: PREVIEW mode is on, not applying tags, skipping to next track/file."
             continue

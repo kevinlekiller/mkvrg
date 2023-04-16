@@ -24,6 +24,8 @@ cat > /dev/null <<DESCRIPTION
     Bash script for analyzing audio tracks in matroska files with ffmpeg and
     applying replaygain gain and peak information
     with mkvpropedit, this avoids remuxing the matroksa file.
+    With mpv, you can add replaygain=track to mpv.conf to enable replaygain tag parsing.
+    With VLC, you can enable replaygain by clicking Tools -> Preferences -> Audio -> Replay gain mode.
     Pass list of files or a directory to scan files, if you pass a
     directory it will recursively search in it for files.
     It will only work on files with these extensions: "mkv, mka, mk3d".
@@ -34,11 +36,15 @@ cat > /dev/null <<DESCRIPTION
     Requires: ffmpeg mkvpropedit
 
     examples:
-    ./mkvrg                  ; Recursive search in current folder for matroska files.
-    ./mkvrg test.mkv         ; Process test.mkv in current folder.
-    ./mkvrg Videos/          ; Recursive search in Videos folder for matroska files.
-    ./mkvrg test.mkv Videos/ ; Process test.mkv in current folder and recursive
-                                  search in Videos folder for matroska files.
+    ./mkvrg                       ; Recursive search in current folder for matroska files.
+    ./mkvrg test.mkv              ; Process test.mkv in current folder.
+    ./mkvrg Videos/               ; Recursive search in Videos folder for matroska files.
+    ./mkvrg test.mkv Videos/      ; Process test.mkv in current folder and recursive
+                                    search in Videos folder for matroska files.
+    FORCE=true ./mkvrg test.mkv   ; Process test.mkv even if it already has replaygain tags.
+    MINSIZE=+100M ./mkvrg         ; Recursive search in current folder for matroska
+                                    files larger than 100MiB.
+    FFMPEGFILTER=loudnorm ./mkvrg ; Use loudnorm ffmpeg filter to scan found files.
 
     See settings below.
 DESCRIPTION
@@ -58,7 +64,7 @@ FORCE=${FORCE:-false}
 MINSIZE=${MINSIZE:-"+0"}
 
 # Remux .mp4 and .mov files to .mkv before scanning for .mkv files.
-REMUX=${REMUX:-true}
+REMUX=${REMUX:-false}
 
 # Which ffmpeg executable to use.
 # Set to ffmpeg to automatically find.

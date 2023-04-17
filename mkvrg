@@ -47,9 +47,9 @@ read -rd '' DESCRIPTION <<DESCRIPTION
     MINSIZE=+100M ./mkvrg         ; Recursive search in current folder for matroska
                                     files larger than 100MiB.
     FFMPEGFILTER=loudnorm ./mkvrg ; Use loudnorm ffmpeg filter to scan found files.
-DESCRIPTION
-read -rd '' VARIABLES <<VARIABLES
+
     Environment Variables:
+
     VERIFY=[true|false]  -> Check if the file already has tags or if tags were written succesfully.
                             Defaults to VERIFY=true
     FORCE=[true|false]   -> Force mkvrg to process matroska files, even if they already have replaygain tags.
@@ -59,7 +59,7 @@ read -rd '' VARIABLES <<VARIABLES
                             Set to MINSIZE=+0 to disable.
                             For example, set MINSIZE=+50M to ignore files under 50MB.
                             Defaults to MINSIZE=+0
-    REMUX=[true|false]   -> Remux .mp4 and .mov files to .mkv before scanning for .mkv files.
+    REMUX=[true|false]   -> Remux non matroska files to .mkv before scanning for .mkv files.
                             Defaults to REMUX=false
     FFMPEG=[path]        ->  Which ffmpeg executable to use.
                             Set to FFMPEG=ffmpeg to use the one in PATH.
@@ -96,7 +96,7 @@ read -rd '' VARIABLES <<VARIABLES
                             Defaults to LOUDNESSOFFSET=0.0
     PREVIEW=[true|false] -> If set to true, no files will be modified, values will be displayed on the console.
                             Defaults to PREVIEW=false
-VARIABLES
+DESCRIPTION
 #########################################################################################
 ##################################### ENV VARS ##########################################
 #########################################################################################
@@ -115,10 +115,9 @@ PREVIEW=${PREVIEW:-false}
 
 if [[ $1 == "--help" || $1 == "-h" ]]; then
     echo "$DESCRIPTION"
-    echo "$VARIABLES"
     exit 0
 fi
-unset DESCRIPTION VARIABLES
+unset DESCRIPTION
 
 if [[ ! $FFMPEGFILTER =~ ^(ebur128|loudnorm|replaygain)$ ]]; then
     echo -e "\e[31mERROR: Invalid FFMPEGFILTER.\e[0m" > /dev/stderr
@@ -183,11 +182,16 @@ function amplitudeToDB() {
     printf "%0.2f" "$(awk "BEGIN{print 20*log($1)/log(10)}")"
 }
 
+function isMatroska() {
+     [[ $(file "$1") =~ "Matroska" ]] && return 0 || return 1
+}
+
 if [[ $PREVIEW == false && $REMUX == true ]]; then
+    REGEX="$(echo "(^.*)\.(asf|avi|flv|m4[pv]|mp[4g]|mov|mpeg|m2?ts|ogv|qt|ts|vob|webm|wmv)$" | sed 's/\([()|]\)/\\\1/g')"
     while read -r file; do
         muxInFile="$(realpath "$file")"
-        muxOutFile=${muxInFile//\.[mM][oO][vV]/.mkv}
-        muxOutFile=${muxOutFile//\.[mM][pP]4/.mkv}
+        isMatroska "$muxInFile" && continue
+        muxOutFile="$(echo "$muxInFile" | sed "s/$REGEX/\1.mkv/")"
         if [[ $muxInFile == "$muxOutFile" ]]; then
             unset muxInFile muxOutFile
             continue
@@ -199,13 +203,14 @@ if [[ $PREVIEW == false && $REMUX == true ]]; then
             rm -f "$muxOutFile"
         fi
         unset muxInFile muxOutFile
-    done < <(find "$@" -type f -size "$MINSIZE" \( -iname "*.mp4" -o -iname "*.mov" \))
+    done < <(find "$@" -type f -size "$MINSIZE" -iregex "$REGEX")
+    unset REGEX
 fi
 
 filesProcessed=0
 while read -r file; do
     file="$(realpath "$file")"
-    if [[ ! $(file "$file") =~ "Matroska" ]]; then
+    if ! isMatroska "$file"; then
         echo -e "\e[92mNOTICE: '$file' is not a matroska file.\e[0m"
         continue
     fi

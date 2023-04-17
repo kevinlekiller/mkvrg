@@ -221,7 +221,7 @@ while read -r file; do
         echo -e "\e[93mWARNING: Could not get track list for '$file'.\e[0m"
         continue
     fi
-    [[ $(echo $ffmpegOut | grep -Po "Stream #0:0(\([a-zA-Z]+\))?: Audio") != "" ]] && audioFirst=true
+    [[ $(echo "$ffmpegOut" | grep -Po "Stream #0:0(\([a-zA-Z]+\))?: Audio") != "" ]] && audioFirst=true
 
     tracksProcessed=0
     for track in $tracks; do
@@ -257,7 +257,7 @@ while read -r file; do
             continue
         fi
 
-        echo "INFO: Found: Gain ($trackGain dB | $(dBToLufs $trackGain) LUFS), peak ($trackPeak amplitude | $(amplitudeToDB $trackPeak) dB) for track $track on file '$file'."
+        echo "INFO: Found: Gain ($trackGain dB | $(dBToLufs "$trackGain") LUFS), peak ($trackPeak amplitude | $(amplitudeToDB "$trackPeak") dB) for track $track on file '$file'."
         if [[ $PREVIEW == true ]]; then
             echo "INFO: PREVIEW mode is on, not applying tags, skipping to next track/file."
             continue

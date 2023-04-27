@@ -158,6 +158,7 @@ REFLOUDNESS="-23.00"
 [[ $FFMPEGFILTER == "loudnorm" ]] && REFLOUDNESS="-24.00"
 [[ $FFMPEGFILTER == "replaygain" ]] && REFLOUDNESS="-18.00"
 [[ $FFMPEGFILTER != "replaygain" ]] && REFLOUDNESS="$(printf "%0.2f" "$(awk "BEGIN{print ($REFLOUDNESS + $LOUDNESSOFFSET)}")")"
+VERIFY_CHECK="${REPLAYGAIN_ALGORITHM}: ${FFMPEGFILTER}"
 
 trap cleantmp SIGHUP SIGINT SIGQUIT SIGTERM
 function cleantmp() {
@@ -167,6 +168,7 @@ function cleantmp() {
 }
 
 function lufsTodB() {
+    [[ $1 =~ ^$ ]] && echo "" && return
     printf "%0.2f" "$(awk "BEGIN{print ($REFLOUDNESS - $1)}")"
 }
 
@@ -175,10 +177,12 @@ function dBToLufs() {
 }
 
 function dBtoAmplitude() {
+    [[ $1 =~ ^$ ]] && $1 && echo "" && return
     printf "%06f" "$(awk "BEGIN{print 10^($1/20)}")"
 }
 
 function amplitudeToDB() {
+    [[ $1 =~ ^$ ]] && $1 && echo "" && return
     printf "%0.2f" "$(awk "BEGIN{print 20*log($1)/log(10)}")"
 }
 
@@ -216,7 +220,7 @@ while read -r file; do
     fi
 
     ffmpegOut=$("$FFMPEG" -nostdin -hide_banner -i "$file" 2>&1)
-    if [[ ! $FORCE == true ]] && [[ $VERIFY == true ]] && [[ "$ffmpegOut" =~ "REPLAYGAIN_ALGORITHM: $FFMPEGFILTER" ]]; then
+    if [[ ! $FORCE == true ]] && [[ $VERIFY == true ]] && [[ "$ffmpegOut" =~ $VERIFY_CHECK ]]; then
         echo -e "\e[92mNOTICE: Skipping, replaygain tags already exist on file '$file'\e[0m"
         continue
     fi
@@ -237,23 +241,23 @@ while read -r file; do
             echo "$ffmpegCmd"
             ffmpegOut=$(eval "$ffmpegCmd" 2>&1 | tr "\n" " " | sed "s/^.*\(Parsed_ebur128.*$\)/\1/" | sed "s/ \+/ /g")
             echo "$ffmpegOut"
-            trackGain=$(lufsTodB "$(echo "$ffmpegOut" | grep -Po " I: -?[\d.]+ LUFS" | cut -d\  -f3)")
-            trackPeak=$(dBtoAmplitude "$(echo "$ffmpegOut" | grep -Po " Peak: -?[\d.]+ dBFS" | cut -d\  -f3)")
-            trackRange=$(printf "%0.2f" "$(echo "$ffmpegOut" | grep -Po " Loudness range: LRA: -?[\d.]+ LU" | cut -d\  -f5)")
+            trackGain=$(lufsTodB "$(echo "$ffmpegOut" | grep -Po " I: -?[0-9.]+ LUFS" | cut -d\  -f3)")
+            trackPeak=$(dBtoAmplitude "$(echo "$ffmpegOut" | grep -Po " Peak: -?[0-9.]+ dBFS" | cut -d\  -f3)")
+            trackRange=$(printf "%0.2f" "$(echo "$ffmpegOut" | grep -Po " Loudness range: LRA: -?[0-9.]+ LU" | cut -d\  -f5)")
         elif [[ $FFMPEGFILTER == "loudnorm" ]]; then
             ffmpegCmd="${ffmpegCmd}loudnorm=print_format=summary\" -f null -"
             echo "$ffmpegCmd"
             ffmpegOut=$(eval "$ffmpegCmd" 2>&1 | tr "\n" " " | sed "s/^.*\(Parsed_loudnorm.*$\)/\1/" | sed "s/ \+/ /g")
             echo "$ffmpegOut"
-            trackGain=$(lufsTodB "$(echo "$ffmpegOut" | grep -Po "Input Integrated: -?[\d.]+ LUFS" | cut -d\  -f3)")
-            trackPeak=$(dBtoAmplitude "$(echo "$ffmpegOut" | grep -Po "Input True Peak: -?[\d.]+ dBTP" | cut -d\  -f4)")
-            trackRange=$(printf "%0.2f" "$(echo "$ffmpegOut" | grep -Po "Input LRA: -?[\d.]+ LU" | cut -d\  -f3)")
+            trackGain=$(lufsTodB "$(echo "$ffmpegOut" | grep -Po "Input Integrated: -?[0-9.]+ LUFS" | cut -d\  -f3)")
+            trackPeak=$(dBtoAmplitude "$(echo "$ffmpegOut" | grep -Po "Input True Peak: -?[0-9.]+ dBTP" | cut -d\  -f4)")
+            trackRange=$(printf "%0.2f" "$(echo "$ffmpegOut" | grep -Po "Input LRA: -?[0-9.]+ LU" | cut -d\  -f3)")
         elif [[ $FFMPEGFILTER == "replaygain" ]]; then
             ffmpegCmd="${ffmpegCmd}replaygain\" -f null -"
             echo "$ffmpegCmd"
             ffmpegOut=$(eval "$ffmpegCmd" 2>&1 | sed "s/track_gain = -24.00 dB//" | sed "s/track_peak = 0.000000//")
-            trackGain=$(echo "$ffmpegOut" | grep -Po "track_gain = [-+]?[\d.]+ dB" | cut -d\  -f3 | sed "s/^+//")
-            trackPeak=$(echo "$ffmpegOut" | grep -Po "track_peak = [01]\.\d+" | cut -d\  -f3)
+            trackGain=$(echo "$ffmpegOut" | grep -Po "track_gain = [-+]?[0-9.]+ dB" | cut -d\  -f3 | sed "s/^+//")
+            trackPeak=$(echo "$ffmpegOut" | grep -Po "track_peak = [01]\.[0-9]+" | cut -d\  -f3)
         else
             exit 8
         fi
@@ -261,7 +265,6 @@ while read -r file; do
             echo -e "\e[92mNOTICE: Problem finding $FFMPEGFILTER info from ffmpeg for track $track on file '$file'.\e[0m"
             continue
         fi
-
         echo "INFO: Found: Gain ($trackGain dB | $(dBToLufs "$trackGain") LUFS), peak ($trackPeak amplitude | $(amplitudeToDB "$trackPeak") dB) for track $track on file '$file'."
         if [[ $PREVIEW == true ]]; then
             echo "INFO: PREVIEW mode is on, not applying tags, skipping to next track/file."
@@ -304,7 +307,7 @@ while read -r file; do
         sed -i "s/^            //g" "$tmpFile"
         sed -i "/^[[:space:]]*$/d" "$tmpFile"
         mkvpropedit --tags track:"$((track+1))":"$tmpFile" "$file"
-        if [[ $VERIFY == true ]] && [[ ! $("$FFMPEG" -nostdin -hide_banner -i "$file" 2>&1) =~ "REPLAYGAIN_ALGORITHM: $FFMPEGFILTER" ]]; then
+        if [[ $VERIFY == true ]] && [[ ! $("$FFMPEG" -nostdin -hide_banner -i "$file" 2>&1) =~ $VERIFY_CHECK ]]; then
             echo -e "\e[93mWARNING: Replaygain has not been applied for track $track on file '$file'.\e[0m"
             continue
         fi

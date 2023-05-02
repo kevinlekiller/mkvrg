@@ -190,9 +190,16 @@ function isMatroska() {
      [[ $(file "$1") =~ "Matroska" ]] && return 0 || return 1
 }
 
+function filePos() {
+    [[ ! $fileIter =~ ^[0-9]+$ ]] || [[ ! ${#files[@]} =~ ^[0-9]+$ ]] && return;
+    echo "(file $fileIter of ${#files[@]}, $(awk "BEGIN{print 100*($fileIter/${#files[@]})}")%)"
+}
+
 if [[ $PREVIEW == false && $REMUX == true ]]; then
+    mapfile -t files < <(find "$@" -type f -size "$MINSIZE" -iregex "$REGEX")
     REGEX="$(echo "(^.*)\.(asf|avi|flv|m4[pv]|mp[4g]|mov|mpeg|m2?ts|ogv|qt|ts|vob|webm|wmv)$" | sed 's/\([()|]\)/\\\1/g')"
-    while read -r file; do
+    for file in "${files[@]}"; do
+        ((fileIter++))
         muxInFile="$(realpath "$file")"
         isMatroska "$muxInFile" && continue
         muxOutFile="$(echo "$muxInFile" | sed "s/$REGEX/\1.mkv/")"
@@ -200,41 +207,43 @@ if [[ $PREVIEW == false && $REMUX == true ]]; then
             unset muxInFile muxOutFile
             continue
         fi
-        echo "INFO: Remuxing '$muxInFile' to '$muxOutFile'."
+        echo "INFO: Remuxing '$muxInFile' to '$muxOutFile' $(filePos)."
         if "$FFMPEG" -y -loglevel error -stats -nostdin -hide_banner -i "$muxInFile" -c copy "$muxOutFile"; then
             rm -f "$muxInFile"
         else
             rm -f "$muxOutFile"
         fi
         unset muxInFile muxOutFile
-    done < <(find "$@" -type f -size "$MINSIZE" -iregex "$REGEX")
-    unset REGEX
+    done
+    unset REGEX files fileIter
 fi
 
+mapfile -t files < <(find "$@" -type f -size "$MINSIZE" \( -iname "*.mk[av]" -o -iname "*.mk3d" \))
 filesProcessed=0
-while read -r file; do
+for file in "${files[@]}"; do
     file="$(realpath "$file")"
+    ((fileIter++))
     if ! isMatroska "$file"; then
-        echo -e "\e[92mNOTICE: '$file' is not a matroska file.\e[0m"
+        echo -e "\e[92mNOTICE: '$file' is not a matroska file $(filePos).\e[0m"
         continue
     fi
 
     ffmpegOut=$("$FFMPEG" -nostdin -hide_banner -i "$file" 2>&1)
     if [[ ! $FORCE == true ]] && [[ $VERIFY == true ]] && [[ "$ffmpegOut" =~ $VERIFY_CHECK ]]; then
-        echo -e "\e[92mNOTICE: Skipping, replaygain tags already exist on file '$file'\e[0m"
+        echo -e "\e[92mNOTICE: Skipping, replaygain tags already exist on file '$file' $(filePos).\e[0m"
         continue
     fi
 
     tracks=$(echo "$ffmpegOut" | grep -Poi "Stream\s*#\d+:\d+.+?Audio" | grep -Po "\d+:\d+" | cut -d : -f 2)
     if [[ $tracks == "" ]]; then
-        echo -e "\e[93mWARNING: Could not get track list for '$file'.\e[0m"
+        echo -e "\e[93mWARNING: Could not get track list for '$file' $(filePos).\e[0m"
         continue
     fi
     [[ $(echo "$ffmpegOut" | grep -Po "Stream #0:0(\([a-zA-Z]+\))?: Audio") != "" ]] && audioFirst=true
 
     tracksProcessed=0
     for track in $tracks; do
-        echo "INFO: Running ffmpeg using filter ${FFMPEGFILTER}, this can take a while. (track $track on file '$file') (REFLOUDNESS = $REFLOUDNESS LUFS)"
+        echo "INFO: Running ffmpeg using filter ${FFMPEGFILTER}, this can take a while. (track $track on file '$file') $(filePos) (REFLOUDNESS = $REFLOUDNESS LUFS)"
         ffmpegCmd="$FFMPEG -loglevel info -nostats -nostdin -hide_banner -i \"$file\" -map 0:a -filter_complex \"[0:a:$([[ $audioFirst ]] && echo "$track" || echo "$((track-1))")]"
         if [[ $FFMPEGFILTER == "ebur128" ]]; then
             ffmpegCmd="${ffmpegCmd}ebur128=peak=$PEAKTYPE:framelog=quiet\" -f null -"
@@ -262,10 +271,10 @@ while read -r file; do
             exit 8
         fi
         if [[ $trackGain == "" || $trackPeak == "" ]]; then
-            echo -e "\e[92mNOTICE: Problem finding $FFMPEGFILTER info from ffmpeg for track $track on file '$file'.\e[0m"
+            echo -e "\e[92mNOTICE: Problem finding $FFMPEGFILTER info from ffmpeg for track $track on file '$file' $(filePos).\e[0m"
             continue
         fi
-        echo "INFO: Found: Gain ($trackGain dB | $(dBToLufs "$trackGain") LUFS), peak ($trackPeak amplitude | $(amplitudeToDB "$trackPeak") dB) for track $track on file '$file'."
+        echo "INFO: Found: Gain ($trackGain dB | $(dBToLufs "$trackGain") LUFS), peak ($trackPeak amplitude | $(amplitudeToDB "$trackPeak") dB) for track $track on file '$file' $(filePos)."
         if [[ $PREVIEW == true ]]; then
             echo "INFO: PREVIEW mode is on, not applying tags, skipping to next track/file."
             continue
@@ -308,12 +317,12 @@ while read -r file; do
         sed -i "/^[[:space:]]*$/d" "$tmpFile"
         mkvpropedit --tags track:"$((track+1))":"$tmpFile" "$file"
         if [[ $VERIFY == true ]] && [[ ! $("$FFMPEG" -nostdin -hide_banner -i "$file" 2>&1) =~ $VERIFY_CHECK ]]; then
-            echo -e "\e[93mWARNING: Replaygain has not been applied for track $track on file '$file'.\e[0m"
+            echo -e "\e[93mWARNING: Replaygain has not been applied for track $track on file '$file' $(filePos).\e[0m"
             continue
         fi
-        echo "INFO: Succesfully applied replaygain tags for track $track on file '$file'."
+        echo "INFO: Succesfully applied replaygain tags for track $track on file '$file' $(filePos)."
         ((tracksProcessed++))
     done
     [[ $tracksProcessed -gt 0 ]] && ((filesProcessed++))
-done < <(find "$@" -type f -size "$MINSIZE" \( -iname "*.mk[av]" -o -iname "*.mk3d" \))
+done
 [[ $filesProcessed -gt 0 ]] && cleantmp 0

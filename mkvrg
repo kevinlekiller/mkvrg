@@ -122,79 +122,107 @@ LC_NUMERIC=C
 # for more convenient regex construction
 FLOAT_ERE='[+-]?[0-9]+\.[0-9]+'
 
+log_error() {
+    printf "\e[31mERROR: %s\e[0m\n" "$@" >&2
+}
 
-if [[ ! $FFMPEGFILTER =~ ^(ebur128|loudnorm|replaygain)$ ]]; then
-    echo -e "\e[31mERROR: Invalid FFMPEGFILTER.\e[0m" > /dev/stderr
+match_ere () { # match string against extended reqex
+    regex="$1" && shift
+    echo "$@" | grep -Eq "$regex"
+}
+
+cmd_exists () {
+    command -v "$1" >/dev/null 2>&1
+}
+
+isint () {
+    match_ere '^[+-]?[[:digit:]]+$' "$1"
+}
+
+isfloat () {
+    match_ere '^[+-]?[[:digit:]]*\.[[:digit:]]+$' "$1"
+}
+
+isnum () {
+    isint "$1" || isfloat "$1"
+}
+
+if ! match_ere '^(ebur128|loudnorm|replaygain)$' "$FFMPEGFILTER"; then
+    log_error "Invalid FFMPEGFILTER."
     exit 2
 fi
 
-if [[ ! $PEAKTYPE =~ ^(sample|true)$ ]]; then
-    echo -e "\e[31mERROR: PEAKTYPE must be either sample or true.\e[0m" > /dev/stderr
+if ! match_ere '^(sample|true)$' "$PEAKTYPE"; then
+    log_error "PEAKTYPE must be either sample or true."
     exit 3
 fi
 
-if [[ ! $LOUDNESSOFFSET =~ ^\-?[0-9]+\.[0-9]+$ ]]; then
-    echo -e "\e[31mERROR: Invalid value for LOUDNESSOFFSET.\e[0m" > /dev/stderr
+if ! isnum "$LOUDNESSOFFSET"; then
+    log_error "Invalid value for LOUDNESSOFFSET."
     exit 4
 fi
 
-if ! command -v "$FFMPEG" &> /dev/null; then
-    echo -e "\e[31mERROR: Unable to find the ffmpeg executable.\e[0m" > /dev/stderr
+if ! cmd_exists "$FFMPEG"; then
+    log_error "Unable to find the ffmpeg executable."
     exit 5
 fi
 
-reqProgs="awk file find grep mkvpropedit mktemp sed"
 for reqProg in $reqProgs; do
-    if ! command -v "$reqProg" &> /dev/null; then
-        echo -e "\e[31mERROR: This program could not be found: $reqProg\e[0m" > /dev/stderr
-        exit 6
+    if ! cmd_exists "$reqProg"; then
+	log_error "This program could not be found: $reqProg"
+	exit 6
     fi
 done
 unset reqProg reqProgs
 
 tmpFile="$(mktemp)"
-if [[ ! -f $tmpFile ]] || [[ ! -w $tmpFile ]]; then
-    echo -e "\e[31mERROR: Could not create temp file $tmpFile. Check permissions.\e[0m" > /dev/stderr
+if [ ! -w "$tmpFile" ]; then
+    log_error "Could not create temp file $tmpFile. Check permissions."
     exit 7
 fi
 
-REFLOUDNESS="-23.00"
-[[ $FFMPEGFILTER == "loudnorm" ]] && REFLOUDNESS="-24.00"
-[[ $FFMPEGFILTER == "replaygain" ]] && REFLOUDNESS="-18.00"
-[[ $FFMPEGFILTER != "replaygain" ]] && REFLOUDNESS="$(printf "%0.2f" "$(awk "BEGIN{print ($REFLOUDNESS + $LOUDNESSOFFSET)}")")"
+REFLOUDNESS="-23"
+case "$FFMPEGFILTER" in
+    loudnorm)	REFLOUDNESS=-24.00 ;;
+    replaygain)	REFLOUDNESS=-18.00 ;;
+esac
+
+[ "$FFMPEGFILTER" != "replaygain" ] &&
+    REFLOUDNESS=$(awk "BEGIN{printf \"%0.2f\", $REFLOUDNESS + $LOUDNESSOFFSET}")
+
 VERIFY_CHECK="${REPLAYGAIN_ALGORITHM}: ${FFMPEGFILTER}"
 
-trap cleantmp SIGHUP SIGINT SIGQUIT SIGTERM
-function cleantmp() {
-    [[ -f $muxInFile && -f $muxOutFile ]] && rm -f "$muxOutFile"
+trap cleantmp HUP INT QUIT TERM
+cleantmp() {
+    [ -f "$muxInFile" ] && [ -f "$muxOutFile" ] && rm -f "$muxOutFile"
     rm -f "$tmpFile"
-    [[ -n $1 ]] && exit "$1" || exit 1
+    [ -n "$1" ] && exit "$1" || exit 1
 }
 
-function lufsTodB() {
-    [[ $1 =~ ^$ ]] && echo "" && return
-    printf "%0.2f" "$(awk "BEGIN{print ($REFLOUDNESS - $1)}")"
+lufsTodB() {
+    isnum "$1" || return 1
+    awk "BEGIN{printf \"%0.2f\", $REFLOUDNESS - $1}"
 }
 
-function dBToLufs() {
+dBToLufs() {
     lufsTodB "$1"
 }
 
-function dBtoAmplitude() {
-    [[ $1 =~ ^$ ]] && $1 && echo "" && return
+dBtoAmplitude() {
+    isnum "$1" || return 1
     printf "%06f" "$(awk "BEGIN{print 10^($1/20)}")"
 }
 
-function amplitudeToDB() {
-    [[ $1 =~ ^$ ]] && $1 && echo "" && return
+amplitudeToDB() {
+    isnum "$1" || return 1
     printf "%0.2f" "$(awk "BEGIN{print 20*log($1)/log(10)}")"
 }
 
-function isMatroska() {
-     [[ $(file "$1") =~ "Matroska" ]] && return 0 || return 1
+isMatroska() {
+     match_ere "Matroska" "$(file "$1")"
 }
 
-function filePos() {
+filePos() {
     [[ ! $fileIter =~ ^[0-9]+$ ]] || [[ ! ${#files[@]} =~ ^[0-9]+$ ]] && return;
     echo "(file $fileIter of ${#files[@]}, $(awk "BEGIN{print 100*($fileIter/${#files[@]})}")%)"
 }

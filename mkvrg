@@ -18,6 +18,7 @@ cat > /dev/null <<LICENSE
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
     https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html
 LICENSE
+reqProgs="awk ffmpeg ffprobe file find grep mkvpropedit mktemp sed"
 read -rd '' DESCRIPTION <<DESCRIPTION
     mkvrg - Apply replaygain tags to matroska files without remuxing (gain is calculated using ffmpeg and tags are applied using mkvpropedit).
 
@@ -34,7 +35,7 @@ read -rd '' DESCRIPTION <<DESCRIPTION
 
     The default alrogrithm used for calculating gain and peak is ffmpeg's ebur128, this can be changed with the FFMPEGFILTER env variable.
 
-    Requires: ffmpeg mkvpropedit
+    Requires: $reqProgs
 
     examples:
     ./mkrvg --help                ; Shows this and exits.
@@ -240,17 +241,12 @@ for file in "${files[@]}"; do
         continue
     fi
 
-    tracks=$(echo "$ffmpegOut" | grep -Poi "Stream\s*#\d+:\d+.+?Audio" | grep -Po "\d+:\d+" | cut -d : -f 2)
-    if [[ $tracks == "" ]]; then
-        echo -e "\e[93mWARNING: Could not get track list for '$file' $(filePos).\e[0m"
-        continue
-    fi
-    [[ $(echo "$ffmpegOut" | grep -Po "Stream #0:0(\([a-zA-Z]+\))?: Audio") != "" ]] && audioFirst=true
+    tracks=$(ffprobe -v error -of default=nw=1:nk=1 -select_streams a -show_entries stream=index "$file")
 
     tracksProcessed=0
     for track in $tracks; do
         echo "INFO: Running ffmpeg using filter ${FFMPEGFILTER}, this can take a while. (track $track on file '$file') $(filePos) (REFLOUDNESS = $REFLOUDNESS LUFS)"
-        ffmpegCmd="$FFMPEG -loglevel info -nostats -nostdin -hide_banner -i \"$file\" -map 0:a -filter_complex \"[0:a:$([[ $audioFirst ]] && echo "$track" || echo "$((track-1))")]"
+        ffmpegCmd="$FFMPEG -loglevel info -nostats -nostdin -hide_banner -i \"$file\" -map 0:$track -filter:a \""
         if [[ $FFMPEGFILTER == "ebur128" ]]; then
             ffmpegCmd="${ffmpegCmd}ebur128=peak=$PEAKTYPE:framelog=quiet\" -f null -"
             echo "$ffmpegCmd"

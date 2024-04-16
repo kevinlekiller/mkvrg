@@ -326,3 +326,5 @@ for file in "${files[@]}"; do
     [[ $tracksProcessed -gt 0 ]] && ((filesProcessed++))
 done
 [[ $filesProcessed -gt 0 ]] && cleantmp 0
+
+# vi: sw=4

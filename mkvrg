@@ -122,6 +122,14 @@ LC_NUMERIC=C
 # for more convenient regex construction
 FLOAT_ERE='[+-]?[0-9]+\.[0-9]+'
 
+log_info () {
+    printf "INFO: %s\n" "$@" >&2
+}
+
+log_warn() {
+    printf "\e[93mWARNING: %s\e[0m\n" "$@" >&2
+}
+
 log_error() {
     printf "\e[31mERROR: %s\e[0m\n" "$@" >&2
 }
@@ -238,7 +246,7 @@ if [[ $PREVIEW == false && $REMUX == true ]]; then
             unset muxInFile muxOutFile
             continue
         fi
-        echo "INFO: Remuxing '$muxInFile' to '$muxOutFile' $(filePos)."
+        log_info "Remuxing '$muxInFile' to '$muxOutFile' $(filePos)."
         if "$FFMPEG" -n -loglevel error -stats -nostdin -hide_banner -i "$muxInFile" -c copy -map 0 "$muxOutFile"; then
             rm -f "$muxInFile"
         else
@@ -268,7 +276,7 @@ for file in "${files[@]}"; do
 
     tracksProcessed=0
     for track in $tracks; do
-        echo "INFO: Running ffmpeg using filter ${FFMPEGFILTER}, this can take a while. (track $track on file '$file') $(filePos) (REFLOUDNESS = $REFLOUDNESS LUFS)"
+        log_info "Running ffmpeg using filter ${FFMPEGFILTER}, this can take a while. (track $track on file '$file') $(filePos) (REFLOUDNESS = $REFLOUDNESS LUFS)"
         ffmpegCmd="$FFMPEG -loglevel info -nostats -nostdin -hide_banner -i \"$file\" -map 0:$track -filter:a \""
         if [[ $FFMPEGFILTER == "ebur128" ]]; then
             ffmpegCmd="${ffmpegCmd}ebur128=peak=$PEAKTYPE:framelog=quiet\" -f null -"
@@ -299,9 +307,9 @@ for file in "${files[@]}"; do
             echo -e "\e[92mNOTICE: Problem finding $FFMPEGFILTER info from ffmpeg for track $track on file '$file' $(filePos).\e[0m"
             continue
         fi
-        echo "INFO: Found: Gain ($trackGain dB | $(dBToLufs "$trackGain") LUFS), peak ($trackPeak amplitude | $(amplitudeToDB "$trackPeak") dB) for track $track on file '$file' $(filePos)."
+        log_info "Found: Gain ($trackGain dB | $(dBToLufs "$trackGain") LUFS), peak ($trackPeak amplitude | $(amplitudeToDB "$trackPeak") dB) for track $track on file '$file' $(filePos)."
         if [[ $PREVIEW == true ]]; then
-            echo "INFO: PREVIEW mode is on, not applying tags, skipping to next track/file."
+            log_info "PREVIEW mode is on, not applying tags, skipping to next track/file."
             continue
         fi
 
@@ -342,10 +350,10 @@ for file in "${files[@]}"; do
         sed -i "/^[[:space:]]*$/d" "$tmpFile"
         mkvpropedit --tags track:"$((track+1))":"$tmpFile" "$file"
         if [[ $VERIFY == true ]] && [[ ! $("$FFMPEG" -nostdin -hide_banner -i "$file" 2>&1) =~ $VERIFY_CHECK ]]; then
-            echo -e "\e[93mWARNING: Replaygain has not been applied for track $track on file '$file' $(filePos).\e[0m"
+            log_warn "Replaygain has not been applied for track $track on file '$file' $(filePos)."
             continue
         fi
-        echo "INFO: Succesfully applied replaygain tags for track $track on file '$file' $(filePos)."
+        log_info "Succesfully applied replaygain tags for track $track on file '$file' $(filePos)."
         ((tracksProcessed++))
     done
     [[ $tracksProcessed -gt 0 ]] && ((filesProcessed++))

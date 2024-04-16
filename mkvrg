@@ -116,6 +116,9 @@ PREVIEW=${PREVIEW:-false}
 # force number handling to C
 LC_NUMERIC=C
 
+# for more convenient regex construction
+FLOAT_ERE='[+-]?[0-9]+\.[0-9]+'
+
 if [[ $1 == "--help" || $1 == "-h" ]]; then
     echo "$DESCRIPTION"
     exit 0
@@ -253,23 +256,23 @@ for file in "${files[@]}"; do
             echo "$ffmpegCmd"
             ffmpegOut=$(eval "$ffmpegCmd" 2>&1 | tr "\n" " " | sed "s/^.*\(Parsed_ebur128.*$\)/\1/" | sed "s/ \+/ /g")
             echo "$ffmpegOut"
-            trackGain=$(lufsTodB "$(echo "$ffmpegOut" | grep -Po " I: -?[0-9.]+ LUFS" | cut -d\  -f3)")
-            trackPeak=$(dBtoAmplitude "$(echo "$ffmpegOut" | grep -Po " Peak: -?[0-9.]+ dBFS" | cut -d\  -f3)")
-            trackRange=$(printf "%0.2f" "$(echo "$ffmpegOut" | grep -Po " Loudness range: LRA: -?[0-9.]+ LU" | cut -d\  -f5)")
+            trackGain=$(lufsTodB "$(echo "$ffmpegOut" | grep -Po " I: $FLOAT_ERE LUFS" | cut -d\  -f3)")
+            trackPeak=$(dBtoAmplitude "$(echo "$ffmpegOut" | grep -Po " Peak: $FLOAT_ERE dBFS" | cut -d\  -f3)")
+            trackRange=$(printf "%0.2f" "$(echo "$ffmpegOut" | grep -Po " Loudness range: LRA: $FLOAT_ERE LU" | cut -d\  -f5)")
         elif [[ $FFMPEGFILTER == "loudnorm" ]]; then
             ffmpegCmd="${ffmpegCmd}loudnorm=print_format=summary\" -f null -"
             echo "$ffmpegCmd"
             ffmpegOut=$(eval "$ffmpegCmd" 2>&1 | tr "\n" " " | sed "s/^.*\(Parsed_loudnorm.*$\)/\1/" | sed "s/ \+/ /g")
             echo "$ffmpegOut"
-            trackGain=$(lufsTodB "$(echo "$ffmpegOut" | grep -Po "Input Integrated: -?[0-9.]+ LUFS" | cut -d\  -f3)")
-            trackPeak=$(dBtoAmplitude "$(echo "$ffmpegOut" | grep -Po "Input True Peak: -?[0-9.]+ dBTP" | cut -d\  -f4)")
-            trackRange=$(printf "%0.2f" "$(echo "$ffmpegOut" | grep -Po "Input LRA: -?[0-9.]+ LU" | cut -d\  -f3)")
+            trackGain=$(lufsTodB "$(echo "$ffmpegOut" | grep -Po "Input Integrated: $FLOAT_ERE LUFS" | cut -d\  -f3)")
+            trackPeak=$(dBtoAmplitude "$(echo "$ffmpegOut" | grep -Po "Input True Peak: $FLOAT_ERE dBTP" | cut -d\  -f4)")
+            trackRange=$(printf "%0.2f" "$(echo "$ffmpegOut" | grep -Po "Input LRA: $FLOAT_ERE LU" | cut -d\  -f3)")
         elif [[ $FFMPEGFILTER == "replaygain" ]]; then
             ffmpegCmd="${ffmpegCmd}replaygain\" -f null -"
             echo "$ffmpegCmd"
             ffmpegOut=$(eval "$ffmpegCmd" 2>&1 | sed "s/track_gain = -24.00 dB//" | sed "s/track_peak = 0.000000//")
-            trackGain=$(echo "$ffmpegOut" | grep -Po "track_gain = [-+]?[0-9.]+ dB" | cut -d\  -f3 | sed "s/^+//")
-            trackPeak=$(echo "$ffmpegOut" | grep -Po "track_peak = [01]\.[0-9]+" | cut -d\  -f3)
+            trackGain=$(echo "$ffmpegOut" | grep -Po "track_gain = $FLOAT_ERE dB" | cut -d\  -f3 | sed "s/^+//")
+            trackPeak=$(echo "$ffmpegOut" | grep -Po "track_peak = $FLOAT_ERE" | cut -d\  -f3)
         else
             exit 8
         fi

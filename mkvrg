@@ -18,8 +18,10 @@ cat > /dev/null <<LICENSE
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
     https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html
 LICENSE
+
 reqProgs="awk ffmpeg ffprobe file find grep mkvpropedit mktemp sed"
-read -rd '' DESCRIPTION <<DESCRIPTION
+[ "$1" = "--help" ] || [ "$1" = "-h" ] &&
+    { cat; exit; } <<DESCRIPTION
     mkvrg - Apply replaygain tags to matroska files without remuxing (gain is calculated using ffmpeg and tags are applied using mkvpropedit).
 
     Bash script for analyzing audio tracks in matroska files with ffmpeg and
@@ -120,11 +122,6 @@ LC_NUMERIC=C
 # for more convenient regex construction
 FLOAT_ERE='[+-]?[0-9]+\.[0-9]+'
 
-if [[ $1 == "--help" || $1 == "-h" ]]; then
-    echo "$DESCRIPTION"
-    exit 0
-fi
-unset DESCRIPTION
 
 if [[ ! $FFMPEGFILTER =~ ^(ebur128|loudnorm|replaygain)$ ]]; then
     echo -e "\e[31mERROR: Invalid FFMPEGFILTER.\e[0m" > /dev/stderr

@@ -215,7 +215,7 @@ if [[ $PREVIEW == false && $REMUX == true ]]; then
             continue
         fi
         echo "INFO: Remuxing '$muxInFile' to '$muxOutFile' $(filePos)."
-        if "$FFMPEG" -y -loglevel error -stats -nostdin -hide_banner -i "$muxInFile" -c copy "$muxOutFile"; then
+        if "$FFMPEG" -n -loglevel error -stats -nostdin -hide_banner -i "$muxInFile" -c copy -map 0 "$muxOutFile"; then
             rm -f "$muxInFile"
         else
             rm -f "$muxOutFile"

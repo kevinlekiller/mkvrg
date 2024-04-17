@@ -209,7 +209,7 @@ if [[ $PREVIEW == false && $REMUX == true ]]; then
         ((fileIter++))
         muxInFile="$(realpath "$file")"
         isMatroska "$muxInFile" && continue
-        muxOutFile="$(echo "$muxInFile" | sed "s/$REGEX/\1.mkv/")"
+        muxOutFile=${muxInFile%.*}.mkv
         if [ -e "$muxOutFile" ]; then
             unset muxInFile muxOutFile
             continue

@@ -205,9 +205,8 @@ function filePos() {
 if [[ $PREVIEW == false && $REMUX == true ]]; then
     mapfile -t files < <(find "$@" -type f -size "$MINSIZE" -iregex "$REGEX")
     REGEX="$(echo "(^.*)\.(asf|avi|flv|m4[pv]|mp[4g]|mov|mpeg|m2?ts|ogv|qt|ts|vob|webm|wmv)$" | sed 's/\([()|]\)/\\\1/g')"
-    for file in "${files[@]}"; do
+    for muxInFile in "${files[@]}"; do
         ((fileIter++))
-        muxInFile="$(realpath "$file")"
         isMatroska "$muxInFile" && continue
         muxOutFile=${muxInFile%.*}.mkv
         if [ -e "$muxOutFile" ]; then
@@ -228,7 +227,6 @@ fi
 mapfile -t files < <(find "$@" -type f -size "$MINSIZE" \( -iname "*.mk[av]" -o -iname "*.mk3d" \))
 filesProcessed=0
 for file in "${files[@]}"; do
-    file="$(realpath "$file")"
     ((fileIter++))
     if ! isMatroska "$file"; then
         echo -e "\e[92mNOTICE: '$file' is not a matroska file $(filePos).\e[0m"

@@ -203,8 +203,8 @@ function filePos() {
 }
 
 if [[ $PREVIEW == false && $REMUX == true ]]; then
-    mapfile -t files < <(find "$@" -type f -size "$MINSIZE" -iregex "$REGEX")
     REGEX="$(echo "(^.*)\.(asf|avi|flv|m4[pv]|mp[4g]|mov|mpeg|m2?ts|ogv|qt|ts|vob|webm|wmv)$" | sed 's/\([()|]\)/\\\1/g')"
+    mapfile -t files < <(find "$@" -type f -size "$MINSIZE" -iregex "$REGEX")
     for muxInFile in "${files[@]}"; do
         ((fileIter++))
         isMatroska "$muxInFile" && continue

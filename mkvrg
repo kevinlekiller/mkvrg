@@ -122,7 +122,7 @@ LC_NUMERIC=C
 # for more convenient regex construction
 FLOAT_ERE='[+-]?[0-9]+\.[0-9]+'
 
-log_message () {
+log_message ( ) {
     level=$1
     case $level in
 	error)
@@ -151,42 +151,42 @@ log_message () {
 	    ;;
     esac
     text="$*"
-    printf '%b%s\e[0m\n' "$color" "$prefix: $text" >&2
-}
+    printf '%b%s\e[0m\n' "$color" "$prefix: $text"
+} >&2
 
-log_error () {
+log_error ( ) {
     log_message error "$@"
 }
 
-log_warn () {
+log_warn ( ) {
     log_message warn "$@"
 }
-log_notice () {
+log_notice ( ) {
     log_message notice "$@"
 }
 
-log_info () {
+log_info ( ) {
     log_message info "$@"
 }
 
-match_ere () { # match string against extended reqex
+match_ere ( ) { # match string against extended reqex
     regex="$1" && shift
     echo "$@" | grep -Eq "$regex"
 }
 
-cmd_exists () {
-    command -v "$1" >/dev/null 2>&1
-}
+cmd_exists ( ) {
+    command -v "$1"
+} >/dev/null 2>&1
 
-isint () {
+isint ( ) {
     match_ere '^[+-]?[[:digit:]]+$' "$1"
 }
 
-isfloat () {
+isfloat ( ) {
     match_ere '^[+-]?[[:digit:]]*\.[[:digit:]]+$' "$1"
 }
 
-isnum () {
+isnum ( ) {
     isint "$1" || isfloat "$1"
 }
 
@@ -236,36 +236,36 @@ esac
 VERIFY_CHECK="${REPLAYGAIN_ALGORITHM}: ${FFMPEGFILTER}"
 
 trap cleantmp HUP INT QUIT TERM
-cleantmp() {
+cleantmp ( ) {
     [ -f "$muxInFile" ] && [ -f "$muxOutFile" ] && rm -f "$muxOutFile"
     rm -f "$tmpFile"
     [ -n "$1" ] && exit "$1" || exit 1
 }
 
-lufsTodB() {
+lufsTodB ( ) {
     isnum "$1" || return 1
     awk "BEGIN{printf \"%0.2f\", $REFLOUDNESS - $1}"
 }
 
-dBToLufs() {
+dBToLufs ( ) {
     lufsTodB "$1"
 }
 
-dBtoAmplitude() {
+dBtoAmplitude ( ) {
     isnum "$1" || return 1
     printf "%06f" "$(awk "BEGIN{print 10^($1/20)}")"
 }
 
-amplitudeToDB() {
+amplitudeToDB ( ) {
     isnum "$1" || return 1
     printf "%0.2f" "$(awk "BEGIN{print 20*log($1)/log(10)}")"
 }
 
-isMatroska() {
+isMatroska ( ) {
      match_ere "Matroska" "$(file "$1")"
 }
 
-filePos() {
+filePos ( ) {
     [[ ! $fileIter =~ ^[0-9]+$ ]] || [[ ! ${#files[@]} =~ ^[0-9]+$ ]] && return;
     echo "(file $fileIter of ${#files[@]}, $(awk "BEGIN{print 100*($fileIter/${#files[@]})}")%)"
 }

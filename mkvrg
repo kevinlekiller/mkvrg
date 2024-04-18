@@ -151,40 +151,20 @@ log_message ( ) {
     printf '%b%s\e[0m\n' "$color" "$prefix: $text"
 } >&2
 
-log_error ( ) {
-    log_message error "$@"
-}
+log_error ( ) { log_message error "$@"; }
+log_warn ( ) { log_message warn "$@"; }
+log_notice ( ) { log_message notice "$@"; }
+log_info ( ) { log_message info "$@"; }
 
-log_warn ( ) {
-    log_message warn "$@"
-}
-log_notice ( ) {
-    log_message notice "$@"
-}
+isint ( ) { match_ere '^[+-]?[[:digit:]]+$' "$1"; }
+isfloat ( ) { match_ere '^[+-]?[[:digit:]]*\.[[:digit:]]+$' "$1"; }
+isnum ( ) { isint "$1" || isfloat "$1"; }
 
-log_info ( ) {
-    log_message info "$@"
-}
+cmd_exists ( ) { command -v "$1"; } >/dev/null 2>&1
 
 match_ere ( ) { # match string against extended reqex
     regex="$1" && shift
     echo "$*" | grep -Eq "$regex"
-}
-
-cmd_exists ( ) {
-    command -v "$1"
-} >/dev/null 2>&1
-
-isint ( ) {
-    match_ere '^[+-]?[[:digit:]]+$' "$1"
-}
-
-isfloat ( ) {
-    match_ere '^[+-]?[[:digit:]]*\.[[:digit:]]+$' "$1"
-}
-
-isnum ( ) {
-    isint "$1" || isfloat "$1"
 }
 
 if ! match_ere '^(ebur128|loudnorm|replaygain)$' "$FFMPEGFILTER"; then

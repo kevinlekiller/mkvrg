@@ -116,8 +116,7 @@ PREVIEW=${PREVIEW:-false}
 ################################### ENV VARS End ########################################
 #########################################################################################
 
-# for more convenient regex construction
-FLOAT_ERE='[+-]?[0-9]+\.[0-9]+'
+LC_NUMERIC=C
 
 log_message ( ) {
     level=$1
@@ -156,8 +155,11 @@ log_warn ( ) { log_message warn "$@"; }
 log_notice ( ) { log_message notice "$@"; }
 log_info ( ) { log_message info "$@"; }
 
+# for more convenient regex construction
+FLOAT_ERE='[+-]?[[:digit:]]*\.[[:digit:]]+'
+
 isint ( ) { match_ere '^[+-]?[[:digit:]]+$' "$1"; }
-isfloat ( ) { match_ere '^[+-]?[[:digit:]]*\.[[:digit:]]+$' "$1"; }
+isfloat ( ) { match_ere "^$FLOAT_ERE$" "$1"; }
 isnum ( ) { isint "$1" || isfloat "$1"; }
 
 cmd_exists ( ) { command -v "$1"; } >/dev/null 2>&1
@@ -201,14 +203,14 @@ if [ ! -w "$tmpFile" ]; then
     exit 7
 fi
 
-REFLOUDNESS="-23"
+REFLOUDNESS=-23.00
 case "$FFMPEGFILTER" in
     loudnorm)	REFLOUDNESS=-24.00 ;;
     replaygain)	REFLOUDNESS=-18.00 ;;
 esac
 
 [ "$FFMPEGFILTER" != "replaygain" ] &&
-    REFLOUDNESS=$(awk "BEGIN{printf \"%0.2f\", $REFLOUDNESS + $LOUDNESSOFFSET}")
+    REFLOUDNESS=$(awk "BEGIN{print $REFLOUDNESS + $LOUDNESSOFFSET}")
 
 VERIFY_CHECK="${REPLAYGAIN_ALGORITHM}: ${FFMPEGFILTER}"
 
@@ -221,7 +223,7 @@ cleantmp ( ) {
 
 lufsTodB ( ) {
     isnum "$1" || return 1
-    awk "BEGIN{printf \"%0.2f\", $REFLOUDNESS - $1}"
+    awk "BEGIN{print $REFLOUDNESS - $1}"
 }
 
 dBToLufs ( ) {
@@ -230,12 +232,12 @@ dBToLufs ( ) {
 
 dBtoAmplitude ( ) {
     isnum "$1" || return 1
-    printf "%06f" "$(awk "BEGIN{print 10^($1/20)}")"
+    awk "BEGIN{print 10^($1/20)}"
 }
 
 amplitudeToDB ( ) {
     isnum "$1" || return 1
-    printf "%0.2f" "$(awk "BEGIN{print 20*log($1)/log(10)}")"
+    awk "BEGIN{print 20*log($1)/log(10)}"
 }
 
 isMatroska ( ) {
@@ -307,23 +309,23 @@ for file in $files; do
             echo "$ffmpegCmd"
             ffmpegOut=$(eval "$ffmpegCmd" 2>&1 | tr "\n" " " | sed "s/^.*\(Parsed_ebur128.*$\)/\1/" | sed "s/ \+/ /g")
             echo "$ffmpegOut"
-            trackGain=$(lufsTodB "$(echo "$ffmpegOut" | grep -Po " I: $FLOAT_ERE LUFS" | cut -d\  -f3)")
-            trackPeak=$(dBtoAmplitude "$(echo "$ffmpegOut" | grep -Po " Peak: $FLOAT_ERE dBFS" | cut -d\  -f3)")
-            trackRange=$(printf "%0.2f" "$(echo "$ffmpegOut" | grep -Po " Loudness range: LRA: $FLOAT_ERE LU" | cut -d\  -f5)")
+            trackGain=$(lufsTodB "$(echo "$ffmpegOut" | grep -Eo " I: $FLOAT_ERE LUFS" | cut -d\  -f3)")
+            trackPeak=$(dBtoAmplitude "$(echo "$ffmpegOut" | grep -Eo " Peak: $FLOAT_ERE dBFS" | cut -d\  -f3)")
+            trackRange=$(echo "$ffmpegOut" | grep -Eo " Loudness range: LRA: $FLOAT_ERE LU" | cut -d\  -f5)
         elif [ "$FFMPEGFILTER" = "loudnorm" ]; then
             ffmpegCmd="${ffmpegCmd}loudnorm=print_format=summary\" -f null -"
             echo "$ffmpegCmd"
             ffmpegOut=$(eval "$ffmpegCmd" 2>&1 | tr "\n" " " | sed "s/^.*\(Parsed_loudnorm.*$\)/\1/" | sed "s/ \+/ /g")
             echo "$ffmpegOut"
-            trackGain=$(lufsTodB "$(echo "$ffmpegOut" | grep -Po "Input Integrated: $FLOAT_ERE LUFS" | cut -d\  -f3)")
-            trackPeak=$(dBtoAmplitude "$(echo "$ffmpegOut" | grep -Po "Input True Peak: $FLOAT_ERE dBTP" | cut -d\  -f4)")
-            trackRange=$(printf "%0.2f" "$(echo "$ffmpegOut" | grep -Po "Input LRA: $FLOAT_ERE LU" | cut -d\  -f3)")
+            trackGain=$(lufsTodB "$(echo "$ffmpegOut" | grep -Eo "Input Integrated: $FLOAT_ERE LUFS" | cut -d\  -f3)")
+            trackPeak=$(dBtoAmplitude "$(echo "$ffmpegOut" | grep -Eo "Input True Peak: $FLOAT_ERE dBTP" | cut -d\  -f4)")
+            trackRange=$(echo "$ffmpegOut" | grep -Eo "Input LRA: $FLOAT_ERE LU" | cut -d\  -f3)
         elif [ "$FFMPEGFILTER" = "replaygain" ]; then
             ffmpegCmd="${ffmpegCmd}replaygain\" -f null -"
             echo "$ffmpegCmd"
             ffmpegOut=$(eval "$ffmpegCmd" 2>&1 | sed "s/track_gain = -24.00 dB//" | sed "s/track_peak = 0.000000//")
-            trackGain=$(echo "$ffmpegOut" | grep -Po "track_gain = $FLOAT_ERE dB" | cut -d\  -f3 | sed "s/^+//")
-            trackPeak=$(echo "$ffmpegOut" | grep -Po "track_peak = $FLOAT_ERE" | cut -d\  -f3)
+            trackGain=$(echo "$ffmpegOut" | grep -Eo "track_gain = $FLOAT_ERE dB" | cut -d\  -f3 | sed "s/^+//")
+            trackPeak=$(echo "$ffmpegOut" | grep -Eo "track_peak = $FLOAT_ERE" | cut -d\  -f3)
         else
             exit 8
         fi
@@ -349,21 +351,21 @@ for file in $files; do
                     </Simple>
                     <Simple>
                         <Name>REPLAYGAIN_REFERENCE_LOUDNESS</Name>
-                        <String>$REFLOUDNESS LUFS</String>
+			<String>$(printf '%0.2f LUFS' "$REFLOUDNESS")</String>
                     </Simple>
                     <Simple>
                         <Name>REPLAYGAIN_TRACK_GAIN</Name>
-                        <String>$trackGain dB</String>
+			<String>$(printf '%0.2f dB' "$trackGain")</String>
                     </Simple>
                     <Simple>
                         <Name>REPLAYGAIN_TRACK_PEAK</Name>
-                        <String>$trackPeak</String>
+			<String>$(printf '%06f' "$trackPeak")</String>
                     </Simple>" > "$tmpFile"
         if [ "$trackRange" != "" ]; then
             echo "
                     <Simple>
                         <Name>REPLAYGAIN_TRACK_RANGE</Name>
-                        <String>$trackRange dB</String>
+			<String>$(printf '%06f dB' "$trackRange")</String>
                     </Simple>" >> "$tmpFile"
         fi
         echo "

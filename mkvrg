@@ -171,7 +171,7 @@ log_info ( ) {
 
 match_ere ( ) { # match string against extended reqex
     regex="$1" && shift
-    echo "$@" | grep -Eq "$regex"
+    echo "$*" | grep -Eq "$regex"
 }
 
 cmd_exists ( ) {
@@ -266,22 +266,29 @@ isMatroska ( ) {
 }
 
 filePos ( ) {
-    [[ ! $fileIter =~ ^[0-9]+$ ]] || [[ ! ${#files[@]} =~ ^[0-9]+$ ]] && return;
-    echo "(file $fileIter of ${#files[@]}, $(awk "BEGIN{print 100*($fileIter/${#files[@]})}")%)"
+    fileIter=$1
+    num_files=$2
+    ! isint "$fileIter" || ! isint "$num_files" && return 1;
+    echo "(file $fileIter of $num_files, $(awk "BEGIN{print 100*($fileIter/$num_files)}")%)"
 }
 
-if [[ $PREVIEW == false && $REMUX == true ]]; then
-    REGEX="$(echo "(^.*)\.(asf|avi|flv|m4[pv]|mp[4g]|mov|mpeg|m2?ts|ogv|qt|ts|vob|webm|wmv)$" | sed 's/\([()|]\)/\\\1/g')"
-    mapfile -t files < <(find "$@" -type f -size "$MINSIZE" -iregex "$REGEX")
-    for muxInFile in "${files[@]}"; do
-        ((fileIter++))
+if [ "$PREVIEW" = false ] && [ "$REMUX" = true ]; then
+    REGEX="(^.*)\.(asf|avi|flv|m4[pv]|mp[4g]|mov|mpeg|m2?ts|ogv|qt|ts|vob|webm|wmv)$"
+    files=$(find "$@" -type f -size "$MINSIZE" -regextype posix-extended -iregex "$REGEX")
+    num_files=$(echo "$files" | wc -l)
+    fileIter=0
+    [ -n "${IFS+set}" ] && IFS_=$IFS
+    for muxInFile in $files; do
+		[ -n "${IFS_+set}" ] && IFS=$IFS_
+		fileIter=$((fileIter+1))
+		_filePos=$(filePos "$fileIter" "$num_files")
         isMatroska "$muxInFile" && continue
         muxOutFile=${muxInFile%.*}.mkv
         if [ -e "$muxOutFile" ]; then
             unset muxInFile muxOutFile
             continue
         fi
-        log_info "Remuxing '$muxInFile' to '$muxOutFile' $(filePos)."
+        log_info "Remuxing '$muxInFile' to '$muxOutFile' $_filePos."
         if "$FFMPEG" -n -loglevel error -stats -nostdin -hide_banner -i "$muxInFile" -c copy -map 0 "$muxOutFile"; then
             rm "$muxInFile"
         else
@@ -292,18 +299,23 @@ if [[ $PREVIEW == false && $REMUX == true ]]; then
     unset REGEX files fileIter
 fi
 
-mapfile -t files < <(find "$@" -type f -size "$MINSIZE" \( -iname "*.mk[av]" -o -iname "*.mk3d" \))
 filesProcessed=0
-for file in "${files[@]}"; do
-    ((fileIter++))
+files=$(find "$@" -type f -size "$MINSIZE" \( -iname "*.mk[av]" -o -iname "*.mk3d" \))
+num_files=$(printf '%s\n' "$files" | wc -l)
+fileIter=0
+[ -n "${IFS+set}" ] && IFS_=$IFS
+for file in $files; do
+    IFS=$IFS_
+    fileIter=$((fileIter+1))
+    _filePos=$(filePos "$fileIter" "$num_files")
     if ! isMatroska "$file"; then
-        echo -e "\e[92mNOTICE: '$file' is not a matroska file $(filePos).\e[0m"
+        log_notice "'$file' is not a matroska file $_filePos."
         continue
     fi
 
     ffmpegOut=$("$FFMPEG" -nostdin -hide_banner -i "$file" 2>&1)
-    if [[ ! $FORCE == true ]] && [[ $VERIFY == true ]] && [[ "$ffmpegOut" =~ $VERIFY_CHECK ]]; then
-        echo -e "\e[92mNOTICE: Skipping, replaygain tags already exist on file '$file' $(filePos).\e[0m"
+    if [ "$FORCE" != true ] && [ "$VERIFY" = true ] && match_ere "$VERIFY_CHECK" "$ffmpegOut"; then
+        log_notice "Skipping, replaygain tags already exist on file '$file' $_filePos."
         continue
     fi
 
@@ -311,9 +323,9 @@ for file in "${files[@]}"; do
 
     tracksProcessed=0
     for track in $tracks; do
-        log_info "Running ffmpeg using filter ${FFMPEGFILTER}, this can take a while. (track $track on file '$file') $(filePos) (REFLOUDNESS = $REFLOUDNESS LUFS)"
+        log_info "Running ffmpeg using filter ${FFMPEGFILTER}, this can take a while. (track $track on file '$file') $_filePos (REFLOUDNESS = $REFLOUDNESS LUFS)"
         ffmpegCmd="$FFMPEG -loglevel info -nostats -nostdin -hide_banner -i \"$file\" -map 0:$track -filter:a \""
-        if [[ $FFMPEGFILTER == "ebur128" ]]; then
+        if [ "$FFMPEGFILTER" = "ebur128" ]; then
             ffmpegCmd="${ffmpegCmd}ebur128=peak=$PEAKTYPE:framelog=quiet\" -f null -"
             echo "$ffmpegCmd"
             ffmpegOut=$(eval "$ffmpegCmd" 2>&1 | tr "\n" " " | sed "s/^.*\(Parsed_ebur128.*$\)/\1/" | sed "s/ \+/ /g")
@@ -321,7 +333,7 @@ for file in "${files[@]}"; do
             trackGain=$(lufsTodB "$(echo "$ffmpegOut" | grep -Po " I: $FLOAT_ERE LUFS" | cut -d\  -f3)")
             trackPeak=$(dBtoAmplitude "$(echo "$ffmpegOut" | grep -Po " Peak: $FLOAT_ERE dBFS" | cut -d\  -f3)")
             trackRange=$(printf "%0.2f" "$(echo "$ffmpegOut" | grep -Po " Loudness range: LRA: $FLOAT_ERE LU" | cut -d\  -f5)")
-        elif [[ $FFMPEGFILTER == "loudnorm" ]]; then
+        elif [ "$FFMPEGFILTER" = "loudnorm" ]; then
             ffmpegCmd="${ffmpegCmd}loudnorm=print_format=summary\" -f null -"
             echo "$ffmpegCmd"
             ffmpegOut=$(eval "$ffmpegCmd" 2>&1 | tr "\n" " " | sed "s/^.*\(Parsed_loudnorm.*$\)/\1/" | sed "s/ \+/ /g")
@@ -329,7 +341,7 @@ for file in "${files[@]}"; do
             trackGain=$(lufsTodB "$(echo "$ffmpegOut" | grep -Po "Input Integrated: $FLOAT_ERE LUFS" | cut -d\  -f3)")
             trackPeak=$(dBtoAmplitude "$(echo "$ffmpegOut" | grep -Po "Input True Peak: $FLOAT_ERE dBTP" | cut -d\  -f4)")
             trackRange=$(printf "%0.2f" "$(echo "$ffmpegOut" | grep -Po "Input LRA: $FLOAT_ERE LU" | cut -d\  -f3)")
-        elif [[ $FFMPEGFILTER == "replaygain" ]]; then
+        elif [ "$FFMPEGFILTER" = "replaygain" ]; then
             ffmpegCmd="${ffmpegCmd}replaygain\" -f null -"
             echo "$ffmpegCmd"
             ffmpegOut=$(eval "$ffmpegCmd" 2>&1 | sed "s/track_gain = -24.00 dB//" | sed "s/track_peak = 0.000000//")
@@ -338,12 +350,12 @@ for file in "${files[@]}"; do
         else
             exit 8
         fi
-        if [[ $trackGain == "" || $trackPeak == "" ]]; then
-            echo -e "\e[92mNOTICE: Problem finding $FFMPEGFILTER info from ffmpeg for track $track on file '$file' $(filePos).\e[0m"
+        if [ "$trackGain" = "" ] || [ "$trackPeak" = "" ]; then
+            log_notice "Problem finding $FFMPEGFILTER info from ffmpeg for track $track on file '$file' $_filePos."
             continue
         fi
-        log_info "Found: Gain ($trackGain dB | $(dBToLufs "$trackGain") LUFS), peak ($trackPeak amplitude | $(amplitudeToDB "$trackPeak") dB) for track $track on file '$file' $(filePos)."
-        if [[ $PREVIEW == true ]]; then
+        log_info "Found: Gain ($trackGain dB | $(dBToLufs "$trackGain") LUFS), peak ($trackPeak amplitude | $(amplitudeToDB "$trackPeak") dB) for track $track on file '$file' $_filePos."
+        if [ "$PREVIEW" = true ]; then
             log_info "PREVIEW mode is on, not applying tags, skipping to next track/file."
             continue
         fi
@@ -370,7 +382,7 @@ for file in "${files[@]}"; do
                         <Name>REPLAYGAIN_TRACK_PEAK</Name>
                         <String>$trackPeak</String>
                     </Simple>" > "$tmpFile"
-        if [[ $trackRange != "" ]]; then
+        if [ "$trackRange" != "" ]; then
             echo "
                     <Simple>
                         <Name>REPLAYGAIN_TRACK_RANGE</Name>
@@ -384,15 +396,15 @@ for file in "${files[@]}"; do
         sed -i "s/^            //g" "$tmpFile"
         sed -i "/^[[:space:]]*$/d" "$tmpFile"
         mkvpropedit --tags track:"$((track+1))":"$tmpFile" "$file"
-        if [[ $VERIFY == true ]] && [[ ! $("$FFMPEG" -nostdin -hide_banner -i "$file" 2>&1) =~ $VERIFY_CHECK ]]; then
-            log_warn "Replaygain has not been applied for track $track on file '$file' $(filePos)."
+        if [ "$VERIFY" = true ] && ! match_ere "$VERIFY_CHECK" "$("$FFMPEG" -nostdin -hide_banner -i "$file" 2>&1)"; then
+            log_warn "Replaygain has not been applied for track $track on file '$file' $_filePos."
             continue
         fi
-        log_info "Succesfully applied replaygain tags for track $track on file '$file' $(filePos)."
-        ((tracksProcessed++))
+        log_info "Succesfully applied replaygain tags for track $track on file '$file' $_filePos."
+        tracksProcessed=$((tracksProcessed+1))
     done
-    [[ $tracksProcessed -gt 0 ]] && ((filesProcessed++))
+    [ $tracksProcessed -gt 0 ] && filesProcessed=$(( filesProcessed + 1 ))
 done
-[[ $filesProcessed -gt 0 ]] && cleantmp 0
+[ $filesProcessed -gt 0 ] && cleantmp 0
 
 # vi: sw=4 ts=4 sts=4 smarttab

@@ -360,4 +360,4 @@ for file in "${files[@]}"; do
 done
 [[ $filesProcessed -gt 0 ]] && cleantmp 0
 
-# vi: sw=4
+# vi: sw=4 ts=4 sts=4 smarttab

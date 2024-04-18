@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 cat > /dev/null <<LICENSE
     Copyright (C) 2016,2023  kevinlekiller
     Copyright (C) 2016  WhitePeter
@@ -115,9 +115,6 @@ PREVIEW=${PREVIEW:-false}
 #########################################################################################
 ################################### ENV VARS End ########################################
 #########################################################################################
-
-# force number handling to C
-LC_NUMERIC=C
 
 # for more convenient regex construction
 FLOAT_ERE='[+-]?[0-9]+\.[0-9]+'

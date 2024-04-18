@@ -122,16 +122,51 @@ LC_NUMERIC=C
 # for more convenient regex construction
 FLOAT_ERE='[+-]?[0-9]+\.[0-9]+'
 
+log_message () {
+    level=$1
+    case $level in
+	error)
+	    color='\e[31m'
+	    prefix='ERROR'
+	    shift
+	    ;;
+	warn|warning)
+	    color='\e[93m'
+	    prefix='WARNING'
+	    shift
+	    ;;
+	notice)
+	    color='\e[92m'
+	    prefix='NOTICE'
+	    shift
+	    ;;
+	info)
+	    color='\e[0m'
+	    prefix='INFO'
+	    shift
+	    ;;
+	*)
+	    color='\e[0m'
+	    prefix='INFO'
+	    ;;
+    esac
+    text="$*"
+    printf '%b%s\e[0m\n' "$color" "$prefix: $text" >&2
+}
+
+log_error () {
+    log_message error "$@"
+}
+
+log_warn () {
+    log_message warn "$@"
+}
+log_notice () {
+    log_message notice "$@"
+}
+
 log_info () {
-    printf "INFO: %s\n" "$@" >&2
-}
-
-log_warn() {
-    printf "\e[93mWARNING: %s\e[0m\n" "$@" >&2
-}
-
-log_error() {
-    printf "\e[31mERROR: %s\e[0m\n" "$@" >&2
+    log_message info "$@"
 }
 
 match_ere () { # match string against extended reqex

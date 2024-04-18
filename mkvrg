@@ -237,8 +237,8 @@ VERIFY_CHECK="${REPLAYGAIN_ALGORITHM}: ${FFMPEGFILTER}"
 
 trap cleantmp HUP INT QUIT TERM
 cleantmp ( ) {
-    [ -f "$muxInFile" ] && [ -f "$muxOutFile" ] && rm -f "$muxOutFile"
-    rm -f "$tmpFile"
+    [ -f "$muxInFile" ] && [ -f "$muxOutFile" ] && rm "$muxOutFile"
+    rm "$tmpFile"
     [ -n "$1" ] && exit "$1" || exit 1
 }
 
@@ -283,9 +283,9 @@ if [[ $PREVIEW == false && $REMUX == true ]]; then
         fi
         log_info "Remuxing '$muxInFile' to '$muxOutFile' $(filePos)."
         if "$FFMPEG" -n -loglevel error -stats -nostdin -hide_banner -i "$muxInFile" -c copy -map 0 "$muxOutFile"; then
-            rm -f "$muxInFile"
+            rm "$muxInFile"
         else
-            rm -f "$muxOutFile"
+            rm "$muxOutFile"
         fi
         unset muxInFile muxOutFile
     done

@@ -256,9 +256,11 @@ if [ "$PREVIEW" = false ] && [ "$REMUX" = true ]; then
     files=$(find "$@" -type f -size "$MINSIZE" -regextype posix-extended -iregex "$REGEX")
     num_files=$(echo "$files" | wc -l)
     fileIter=0
-    [ -n "${IFS+set}" ] && IFS_=$IFS
+    IFS_=$IFS
+    # newline as IFS
+    IFS="$(printf '\n\r')"
     for muxInFile in $files; do
-	[ -n "${IFS_+set}" ] && IFS=$IFS_
+	IFS=$IFS_
 	fileIter=$((fileIter+1))
 	_filePos=$(filePos "$fileIter" "$num_files")
 	isMatroska "$muxInFile" && continue
@@ -279,10 +281,13 @@ if [ "$PREVIEW" = false ] && [ "$REMUX" = true ]; then
 fi
 
 filesProcessed=0
+# FIXME: if there were non-mkv files in $@ find will throw an error because they got remuxed
 files=$(find "$@" -type f -size "$MINSIZE" \( -iname "*.mk[av]" -o -iname "*.mk3d" \))
 num_files=$(printf '%s\n' "$files" | wc -l)
 fileIter=0
-[ -n "${IFS+set}" ] && IFS_=$IFS
+IFS_=$IFS
+# newline as IFS
+IFS="$(printf '\n\r')"
 for file in $files; do
     IFS=$IFS_
     fileIter=$((fileIter+1))
@@ -375,6 +380,7 @@ for file in $files; do
         sed -i "s/^            //g" "$tmpFile"
         sed -i "/^[[:space:]]*$/d" "$tmpFile"
         mkvpropedit --tags track:"$((track+1))":"$tmpFile" "$file"
+	# FIXME: Needs actual check of values
         if [ "$VERIFY" = true ] && ! match_ere "$VERIFY_CHECK" "$("$FFMPEG" -nostdin -hide_banner -i "$file" 2>&1)"; then
             log_warn "Replaygain has not been applied for track $track on file '$file' $_filePos."
             continue

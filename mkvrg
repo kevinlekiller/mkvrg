@@ -276,11 +276,11 @@ if [ "$PREVIEW" = false ] && [ "$REMUX" = true ]; then
     fileIter=0
     [ -n "${IFS+set}" ] && IFS_=$IFS
     for muxInFile in $files; do
-		[ -n "${IFS_+set}" ] && IFS=$IFS_
-		fileIter=$((fileIter+1))
-		_filePos=$(filePos "$fileIter" "$num_files")
-        isMatroska "$muxInFile" && continue
-        muxOutFile=${muxInFile%.*}.mkv
+	[ -n "${IFS_+set}" ] && IFS=$IFS_
+	fileIter=$((fileIter+1))
+	_filePos=$(filePos "$fileIter" "$num_files")
+	isMatroska "$muxInFile" && continue
+	muxOutFile=${muxInFile%.*}.mkv
         if [ -e "$muxOutFile" ]; then
             unset muxInFile muxOutFile
             continue
@@ -404,4 +404,4 @@ for file in $files; do
 done
 [ $filesProcessed -gt 0 ] && cleantmp 0
 
-# vi: sw=4 ts=4 sts=4 smarttab
+# vi: sw=4 sts=4 smarttab

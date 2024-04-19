@@ -221,6 +221,16 @@ if [ ! -w "$tmpFile" ]; then
 fi
 # Create temporary file }}}
 
+#{{{ cleantmp ( )
+cleantmp ( ) {
+    exit_code=$?
+    [ -f "$muxInFile" ] && [ -f "$muxOutFile" ] && rm "$muxOutFile"
+    rm "$tmpFile"
+    exit $exit_code
+}
+#}}} cleantmp ( ) 
+trap cleantmp HUP INT QUIT TERM EXIT
+
 #{{{ Set reference loudness
 REFLOUDNESS=-23.00
 case "$FFMPEGFILTER" in
@@ -233,13 +243,6 @@ esac
 # Set reference loudness }}}
 
 VERIFY_CHECK="${REPLAYGAIN_ALGORITHM}: ${FFMPEGFILTER}"
-
-trap cleantmp HUP INT QUIT TERM
-cleantmp ( ) {
-    [ -f "$muxInFile" ] && [ -f "$muxOutFile" ] && rm "$muxOutFile"
-    rm "$tmpFile"
-    [ -n "$1" ] && exit "$1" || exit 1
-}
 
 lufsTodB ( ) {
     isnum "$1" || return 1
@@ -410,6 +413,6 @@ for file in $files; do
     done
     [ $tracksProcessed -gt 0 ] && filesProcessed=$(( filesProcessed + 1 ))
 done
-[ $filesProcessed -gt 0 ] && cleantmp 0
+[ $filesProcessed -gt 0 ]
 
 # vi: sw=4 sts=4 smarttab foldmethod=marker

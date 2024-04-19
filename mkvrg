@@ -226,12 +226,17 @@ fi
 #{{{ cleantmp ( )
 cleantmp ( ) {
     exit_code=$?
+    log_info "Caught signal $1, cleaning up."
     [ -f "$muxInFile" ] && [ -f "$muxOutFile" ] && rm "$muxOutFile"
     rm "$tmpFile"
+    trap - EXIT
     exit $exit_code
 }
 #}}} cleantmp ( ) 
-trap cleantmp HUP INT QUIT TERM EXIT
+for sig in HUP INT QUIT TERM EXIT; do
+    # shellcheck disable=2064
+    trap "cleantmp $sig" "$sig"
+done
 
 #{{{ Set reference loudness
 REFLOUDNESS=-23.00

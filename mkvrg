@@ -165,16 +165,18 @@ log_notice ( ) { log_message notice "$@"; }
 log_info ( ) { log_message info "$@"; }
 # Logging }}}
 
-# {{{ Number checking
+# {{{ Checking functions
 # for more convenient regex construction
 FLOAT_ERE='[+-]?[[:digit:]]*\.[[:digit:]]+'
 
 isint ( ) { match_ere '^[+-]?[[:digit:]]+$' "$1"; }
 isfloat ( ) { match_ere "^$FLOAT_ERE$" "$1"; }
 isnum ( ) { isint "$1" || isfloat "$1"; }
-# Number checking }}}
 
 cmd_exists ( ) { command -v "$1"; } >/dev/null 2>&1
+
+isMatroska ( ) { match_ere "Matroska" "$(file "$1")"; }
+# }}} Checking functions
 
 # {{{ match_ere ( )  # match string against extended reqex
 match_ere ( ) {
@@ -242,8 +244,7 @@ esac
     REFLOUDNESS=$(awk "BEGIN{print $REFLOUDNESS + $LOUDNESSOFFSET}")
 # Set reference loudness }}}
 
-VERIFY_CHECK="${REPLAYGAIN_ALGORITHM}: ${FFMPEGFILTER}"
-
+#{{{ Math functions
 lufsTodB ( ) {
     isnum "$1" || return 1
     awk "BEGIN{print $REFLOUDNESS - $1}"
@@ -262,18 +263,18 @@ amplitudeToDB ( ) {
     isnum "$1" || return 1
     awk "BEGIN{print 20*log($1)/log(10)}"
 }
+#}}} Math functions
 
-isMatroska ( ) {
-     match_ere "Matroska" "$(file "$1")"
-}
-
+#{{{ filePos ( )  # Show progress
 filePos ( ) {
     fileIter=$1
     num_files=$2
     ! isint "$fileIter" || ! isint "$num_files" && return 1;
     echo "(file $fileIter of $num_files, $(awk "BEGIN{print 100*($fileIter/$num_files)}")%)"
 }
+#}}} filePos ( )
 
+#{{{ Remux files
 if [ "$PREVIEW" = false ] && [ "$REMUX" = true ]; then
     REGEX="(^.*)\.(asf|avi|flv|m4[pv]|mp[4g]|mov|mpeg|m2?ts|ogv|qt|ts|vob|webm|wmv)$"
     files=$(find "$@" -type f -size "$MINSIZE" -regextype posix-extended -iregex "$REGEX")
@@ -296,13 +297,17 @@ if [ "$PREVIEW" = false ] && [ "$REMUX" = true ]; then
         if "$FFMPEG" -n -loglevel error -stats -nostdin -hide_banner -i "$muxInFile" -c copy -map 0 "$muxOutFile"; then
             rm "$muxInFile"
         else
+	    log_error "Something went wrong while muxing $muxOutFile, deleting."
             rm "$muxOutFile"
         fi
         unset muxInFile muxOutFile
     done
     unset REGEX files fileIter
 fi
+#}}} Remux files
 
+#{{{ Main action: Calculating gain and tagging files
+VERIFY_CHECK="${REPLAYGAIN_ALGORITHM}: ${FFMPEGFILTER}"
 filesProcessed=0
 # FIXME: if there were non-mkv files in $@ find will throw an error because they got remuxed
 files=$(find "$@" -type f -size "$MINSIZE" \( -iname "*.mk[av]" -o -iname "*.mk3d" \))
@@ -311,6 +316,7 @@ fileIter=0
 IFS_=$IFS
 # newline as IFS
 IFS="$(printf '\n\r')"
+#{{{ file loop
 for file in $files; do
     IFS=$IFS_
     fileIter=$((fileIter+1))
@@ -328,8 +334,10 @@ for file in $files; do
 
     tracks=$(ffprobe -v error -of default=nw=1:nk=1 -select_streams a -show_entries stream=index "$file")
 
+    #{{{ track loop
     tracksProcessed=0
     for track in $tracks; do
+	#{{{ gain calculation
         log_info "Running ffmpeg using filter ${FFMPEGFILTER}, this can take a while. (track $track on file '$file') $_filePos (REFLOUDNESS = $REFLOUDNESS LUFS)"
         ffmpegCmd="$FFMPEG -loglevel info -nostats -nostdin -hide_banner -i \"$file\" -map 0:$track -filter:a \""
         if [ "$FFMPEGFILTER" = "ebur128" ]; then
@@ -366,7 +374,9 @@ for file in $files; do
             log_info "PREVIEW mode is on, not applying tags, skipping to next track/file."
             continue
         fi
+	#}}} gain calculation
 
+	#{{{ track tag generation
         echo "<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>
             <!DOCTYPE Tags SYSTEM \"matroskatags.dtd\">
             <Tags>
@@ -409,10 +419,12 @@ for file in $files; do
             continue
         fi
         log_info "Succesfully applied replaygain tags for track $track on file '$file' $_filePos."
+	#}}} track tag generation
         tracksProcessed=$((tracksProcessed+1))
-    done
-    [ $tracksProcessed -gt 0 ] && filesProcessed=$(( filesProcessed + 1 ))
+    done; [ $tracksProcessed -gt 0 ] && filesProcessed=$(( filesProcessed + 1 ))
+    #}}} track loop
 done
-[ $filesProcessed -gt 0 ]
+#}}} file loop
+#}}} Main action: Calculating gain and tagging files
 
 # vi: sw=4 sts=4 smarttab foldmethod=marker

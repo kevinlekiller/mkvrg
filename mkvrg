@@ -270,73 +270,9 @@ amplitudeToDB ( ) {
 }
 #}}} Math functions
 
-#{{{ filePos ( )  # Show progress
-filePos ( ) {
-    fileIter=$1
-    num_files=$2
-    ! isint "$fileIter" || ! isint "$num_files" && return 1;
-    echo "(file $fileIter of $num_files, $(awk "BEGIN{print 100*($fileIter/$num_files)}")%)"
-}
-#}}} filePos ( )
-
-#{{{ Remux files
-if [ "$PREVIEW" = false ] && [ "$REMUX" = true ]; then
-    REGEX="(^.*)\.(asf|avi|flv|m4[pv]|mp[4g]|mov|mpeg|m2?ts|ogv|qt|ts|vob|webm|wmv)$"
-    files=$(find "$@" -type f -size "$MINSIZE" -regextype posix-extended -iregex "$REGEX")
-    num_files=$(echo "$files" | wc -l)
-    fileIter=0
-    IFS_=$IFS
-    # newline as IFS
-    IFS="$(printf '\n\r')"
-    for muxInFile in $files; do
-	IFS=$IFS_
-	fileIter=$((fileIter+1))
-	_filePos=$(filePos "$fileIter" "$num_files")
-	isMatroska "$muxInFile" && continue
-	muxOutFile=${muxInFile%.*}.mkv
-        if [ -e "$muxOutFile" ]; then
-            unset muxInFile muxOutFile
-            continue
-        fi
-        log_info "Remuxing '$muxInFile' to '$muxOutFile' $_filePos."
-        if "$FFMPEG" -n -loglevel error -stats -nostdin -hide_banner -i "$muxInFile" -c copy -map 0 "$muxOutFile"; then
-            rm "$muxInFile"
-        else
-	    log_error "Something went wrong while muxing $muxOutFile, deleting."
-            rm "$muxOutFile"
-        fi
-        unset muxInFile muxOutFile
-    done
-    unset REGEX files fileIter
-fi
-#}}} Remux files
-
-#{{{ Main action: Calculating gain and tagging files
-VERIFY_CHECK="${REPLAYGAIN_ALGORITHM}: ${FFMPEGFILTER}"
-filesProcessed=0
-# FIXME: if there were non-mkv files in $@ find will throw an error because they got remuxed
-files=$(find "$@" -type f -size "$MINSIZE" \( -iname "*.mk[av]" -o -iname "*.mk3d" \))
-num_files=$(printf '%s\n' "$files" | wc -l)
-fileIter=0
-IFS_=$IFS
-# newline as IFS
-IFS="$(printf '\n\r')"
-#{{{ file loop
-for file in $files; do
-    IFS=$IFS_
-    fileIter=$((fileIter+1))
-    _filePos=$(filePos "$fileIter" "$num_files")
-    if ! isMatroska "$file"; then
-        log_notice "'$file' is not a matroska file $_filePos."
-        continue
-    fi
-
-    ffmpegOut=$("$FFMPEG" -nostdin -hide_banner -i "$file" 2>&1)
-    if [ "$FORCE" != true ] && [ "$VERIFY" = true ] && match_ere "$VERIFY_CHECK" "$ffmpegOut"; then
-        log_notice "Skipping, replaygain tags already exist on file '$file' $_filePos."
-        continue
-    fi
-
+#{{{ tag_tracks ( )  # Calculate RG and tag file
+tag_tracks ( ) {
+    file="$1"
     tracks=$(ffprobe -v error -of default=nw=1:nk=1 -select_streams a -show_entries stream=index "$file")
 
     #{{{ track loop
@@ -428,6 +364,78 @@ for file in $files; do
         tracksProcessed=$((tracksProcessed+1))
     done; [ $tracksProcessed -gt 0 ] && filesProcessed=$(( filesProcessed + 1 ))
     #}}} track loop
+}
+#}}} tag_tracks ( )
+
+#{{{ filePos ( )  # Show progress
+filePos ( ) {
+    fileIter=$1
+    num_files=$2
+    ! isint "$fileIter" || ! isint "$num_files" && return 1;
+    echo "(file $fileIter of $num_files, $(awk "BEGIN{print 100*($fileIter/$num_files)}")%)"
+}
+#}}} filePos ( )
+
+#{{{ Remux files
+if [ "$PREVIEW" = false ] && [ "$REMUX" = true ]; then
+    REGEX="(^.*)\.(asf|avi|flv|m4[pv]|mp[4g]|mov|mpeg|m2?ts|ogv|qt|ts|vob|webm|wmv)$"
+    files=$(find "$@" -type f -size "$MINSIZE" -regextype posix-extended -iregex "$REGEX")
+    num_files=$(echo "$files" | wc -l)
+    fileIter=0
+    IFS_=$IFS
+    # newline as IFS
+    IFS="$(printf '\n\r')"
+    for muxInFile in $files; do
+	IFS=$IFS_
+	fileIter=$((fileIter+1))
+	_filePos=$(filePos "$fileIter" "$num_files")
+	isMatroska "$muxInFile" && continue
+	muxOutFile=${muxInFile%.*}.mkv
+        if [ -e "$muxOutFile" ]; then
+            unset muxInFile muxOutFile
+            continue
+        fi
+        log_info "Remuxing '$muxInFile' to '$muxOutFile' $_filePos."
+        if "$FFMPEG" -n -loglevel error -stats -nostdin -hide_banner -i "$muxInFile" -c copy -map 0 "$muxOutFile"; then
+            rm "$muxInFile"
+	    tag_tracks "$muxOutFile"
+        else
+	    log_error "Something went wrong while muxing $muxOutFile, deleting."
+            rm "$muxOutFile"
+        fi
+        unset muxInFile muxOutFile
+    done
+    unset REGEX files fileIter
+fi
+#}}} Remux files
+
+#{{{ Main action: Calculating gain and tagging files
+VERIFY_CHECK="${REPLAYGAIN_ALGORITHM}: ${FFMPEGFILTER}"
+filesProcessed=0
+# FIXME: if there were non-mkv files in $@ find will throw an error because they got remuxed
+files=$(find "$@" -type f -size "$MINSIZE" \( -iname "*.mk[av]" -o -iname "*.mk3d" \))
+num_files=$(printf '%s\n' "$files" | wc -l)
+fileIter=0
+IFS_=$IFS
+# newline as IFS
+IFS="$(printf '\n\r')"
+#{{{ file loop
+for file in $files; do
+    IFS=$IFS_
+    fileIter=$((fileIter+1))
+    _filePos=$(filePos "$fileIter" "$num_files")
+    if ! isMatroska "$file"; then
+        log_notice "'$file' is not a matroska file $_filePos."
+        continue
+    fi
+
+    ffmpegOut=$("$FFMPEG" -nostdin -hide_banner -i "$file" 2>&1)
+    if [ "$FORCE" != true ] && [ "$VERIFY" = true ] && match_ere "$VERIFY_CHECK" "$ffmpegOut"; then
+        log_notice "Skipping, replaygain tags already exist on file '$file' $_filePos."
+        continue
+    fi
+
+    tag_tracks "$file"
 done
 #}}} file loop
 #}}} Main action: Calculating gain and tagging files

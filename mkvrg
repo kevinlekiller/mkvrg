@@ -1,4 +1,5 @@
 #!/bin/sh
+# {{{ License
 cat > /dev/null <<LICENSE
     Copyright (C) 2016,2023  kevinlekiller
     Copyright (C) 2016  WhitePeter
@@ -18,7 +19,9 @@ cat > /dev/null <<LICENSE
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
     https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html
 LICENSE
+# License }}}
 
+# {{{ Help
 reqProgs="awk ffmpeg ffprobe file find grep mkvpropedit mktemp sed"
 [ "$1" = "--help" ] || [ "$1" = "-h" ] &&
     { cat; exit; } <<DESCRIPTION
@@ -100,9 +103,13 @@ reqProgs="awk ffmpeg ffprobe file find grep mkvpropedit mktemp sed"
     PREVIEW=[true|false] -> If set to true, no files will be modified, values will be displayed on the console.
                             Defaults to PREVIEW=false
 DESCRIPTION
+# Help }}}
+
+# {{{ ENV VARS
 #########################################################################################
 ##################################### ENV VARS ##########################################
 #########################################################################################
+LC_NUMERIC=C
 VERIFY=${VERIFY:-true}
 FORCE=${FORCE:-false}
 MINSIZE=${MINSIZE:-"+0"}
@@ -115,9 +122,10 @@ PREVIEW=${PREVIEW:-false}
 #########################################################################################
 ################################### ENV VARS End ########################################
 #########################################################################################
+# ENV VARS }}}
 
-LC_NUMERIC=C
-
+# {{{ Logging
+# {{{ log_message ( )
 log_message ( ) {
     level=$1
     case $level in
@@ -149,26 +157,33 @@ log_message ( ) {
     text="$*"
     printf '%b%s\e[0m\n' "$color" "$prefix: $text"
 } >&2
+# log_message ( ) }}}
 
 log_error ( ) { log_message error "$@"; }
 log_warn ( ) { log_message warn "$@"; }
 log_notice ( ) { log_message notice "$@"; }
 log_info ( ) { log_message info "$@"; }
+# Logging }}}
 
+# {{{ Number checking
 # for more convenient regex construction
 FLOAT_ERE='[+-]?[[:digit:]]*\.[[:digit:]]+'
 
 isint ( ) { match_ere '^[+-]?[[:digit:]]+$' "$1"; }
 isfloat ( ) { match_ere "^$FLOAT_ERE$" "$1"; }
 isnum ( ) { isint "$1" || isfloat "$1"; }
+# Number checking }}}
 
 cmd_exists ( ) { command -v "$1"; } >/dev/null 2>&1
 
-match_ere ( ) { # match string against extended reqex
+# {{{ match_ere ( )  # match string against extended reqex
+match_ere ( ) {
     regex="$1" && shift
     echo "$*" | grep -Eq "$regex"
 }
+# }}}
 
+# {{{ Initial checks
 if ! match_ere '^(ebur128|loudnorm|replaygain)$' "$FFMPEGFILTER"; then
     log_error "Invalid FFMPEGFILTER."
     exit 2
@@ -196,13 +211,17 @@ for reqProg in $reqProgs; do
     fi
 done
 unset reqProg reqProgs
+# Initial checks }}}
 
+#{{{ Create temporary file
 tmpFile="$(mktemp)"
 if [ ! -w "$tmpFile" ]; then
     log_error "Could not create temp file $tmpFile. Check permissions."
     exit 7
 fi
+# Create temporary file }}}
 
+#{{{ Set reference loudness
 REFLOUDNESS=-23.00
 case "$FFMPEGFILTER" in
     loudnorm)	REFLOUDNESS=-24.00 ;;
@@ -211,6 +230,7 @@ esac
 
 [ "$FFMPEGFILTER" != "replaygain" ] &&
     REFLOUDNESS=$(awk "BEGIN{print $REFLOUDNESS + $LOUDNESSOFFSET}")
+# Set reference loudness }}}
 
 VERIFY_CHECK="${REPLAYGAIN_ALGORITHM}: ${FFMPEGFILTER}"
 
@@ -392,4 +412,4 @@ for file in $files; do
 done
 [ $filesProcessed -gt 0 ] && cleantmp 0
 
-# vi: sw=4 sts=4 smarttab
+# vi: sw=4 sts=4 smarttab foldmethod=marker

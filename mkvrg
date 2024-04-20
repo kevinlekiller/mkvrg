@@ -1,4 +1,5 @@
-#!/bin/bash
+#!/bin/sh
+# {{{ License
 cat > /dev/null <<LICENSE
     Copyright (C) 2016,2023  kevinlekiller
     Copyright (C) 2016  WhitePeter
@@ -18,8 +19,11 @@ cat > /dev/null <<LICENSE
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
     https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html
 LICENSE
+# License }}}
+
+# {{{ Help
 reqProgs="awk ffmpeg ffprobe file find grep mkvpropedit mktemp sed"
-read -rd '' DESCRIPTION <<DESCRIPTION
+print_help ( ) { cat; } >&2 <<DESCRIPTION
     mkvrg - Apply replaygain tags to matroska files without remuxing (gain is calculated using ffmpeg and tags are applied using mkvpropedit).
 
     Bash script for analyzing audio tracks in matroska files with ffmpeg and
@@ -43,64 +47,68 @@ read -rd '' DESCRIPTION <<DESCRIPTION
     ./mkvrg test.mkv              ; Process test.mkv in current folder.
     ./mkvrg Videos/               ; Recursive search in Videos folder for matroska files.
     ./mkvrg test.mkv Videos/      ; Process test.mkv in current folder and recursive
-                                    search in Videos folder for matroska files.
+				    search in Videos folder for matroska files.
     FORCE=true ./mkvrg test.mkv   ; Process test.mkv even if it already has replaygain tags.
     MINSIZE=+100M ./mkvrg         ; Recursive search in current folder for matroska
-                                    files larger than 100MiB.
+				    files larger than 100MiB.
     FFMPEGFILTER=loudnorm ./mkvrg ; Use loudnorm ffmpeg filter to scan found files.
 
     Environment Variables:
 
     VERIFY=[true|false]  -> Check if the file already has tags or if tags were written succesfully.
-                            Defaults to VERIFY=true
+			    Defaults to VERIFY=true
     FORCE=[true|false]   -> Force mkvrg to process matroska files, even if they already have replaygain tags.
-                            If VERIFY=false, files will always be processed.
-                            Defaults to FORCE=false
+			    If VERIFY=false, files will always be processed.
+			    Defaults to FORCE=false
     MINSIZE=+[0-9][KMBG] -> Minimum matroska file size to work on.
-                            Set to MINSIZE=+0 to disable.
-                            For example, set MINSIZE=+50M to ignore files under 50MB.
-                            Defaults to MINSIZE=+0
+			    Set to MINSIZE=+0 to disable.
+			    For example, set MINSIZE=+50M to ignore files under 50MB.
+			    Defaults to MINSIZE=+0
     REMUX=[true|false]   -> Remux non matroska files to .mkv before scanning for .mkv files.
-                            Defaults to REMUX=false
+			    Defaults to REMUX=false
     FFMPEG=[path]        ->  Which ffmpeg executable to use.
-                            Set to FFMPEG=ffmpeg to use the one in PATH.
-                            For example, set to FFMPEG=/home/user/ffmpeg/ffmpeg
-                            Defaults to FFMPEG=ffmpeg
+			    Set to FFMPEG=ffmpeg to use the one in PATH.
+			    For example, set to FFMPEG=/home/user/ffmpeg/ffmpeg
+			    Defaults to FFMPEG=ffmpeg
     FFMPEGFILTER=        ->
-        [ebur128|loudnorm|replaygain]
-                            Which ffmpeg filter to use for scanning the audio.
-                            Each filter calculates the gain/peak differently.
-                            Lower reference loudness = quieter output (replaygain will be louder than ebur128 for example).
-                            Faster speed = less time it takes to scan the audio.
-                            replaygain: Speed:               Fast.      Roughly 10x faster than loudnorm.
-                                        Reference loudness: -18.00 LUFS
-                            ebur128:    Speed:               Normal.    Roughly 5x faster than loudnorm.
-                                                                        Note: This is with true peak calculation, which is slower.
-                                        Reference loudness: -23.00 LUFS
-                            loudnorm:   Speed:               Slow.
-                                        Reference loudness: -24.00 LUFS
-                            Defaults to FFMPEGFILTER=ebur128
+	[ebur128|loudnorm|replaygain]
+			    Which ffmpeg filter to use for scanning the audio.
+			    Each filter calculates the gain/peak differently.
+			    Lower reference loudness = quieter output (replaygain will be louder than ebur128 for example).
+			    Faster speed = less time it takes to scan the audio.
+			    replaygain: Speed:               Fast.      Roughly 10x faster than loudnorm.
+					Reference loudness: -18.00 LUFS
+			    ebur128:    Speed:               Normal.    Roughly 5x faster than loudnorm.
+									Note: This is with true peak calculation, which is slower.
+					Reference loudness: -23.00 LUFS
+			    loudnorm:   Speed:               Slow.
+					Reference loudness: -24.00 LUFS
+			    Defaults to FFMPEGFILTER=ebur128
     PEAKTYPE=            ->
-         [true|sample]
-                            Type of peak calculation to use.
-                            Note: Only used for ebur128 filter.
-                            sample : Faster but less accurate. Varies from file to file, but can be up to 2x faster in testing.
-                            true : Slower but accurate.
-                            Defaults to PEAKTYPE=true
+	 [true|sample]
+			    Type of peak calculation to use.
+			    Note: Only used for ebur128 filter.
+			    sample : Faster but less accurate. Varies from file to file, but can be up to 2x faster in testing.
+			    true : Slower but accurate.
+			    Defaults to PEAKTYPE=true
     LOUDNESSOFFSET=
-          [+-]0.0        -> Affects the calculation of LUFS to dB, which affects how loud or quiet the audio will be.
-                            Adding a positive number will make the audio louder, adding a negative number will make it quieter.
-                            For example, the reference loudness of ebur128 is -23.00, if we set LOUDNESSOFFSET=5.00, the gain
-                            will be roughly the same as what the replaygain  (-18.00 reference) filter will calculate.
-                            Note: This only affects ebur128 and loudnorm filters.
-                            Disable by setting LOUDNESSOFFSET=0.0
-                            Defaults to LOUDNESSOFFSET=0.0
+	  [+-]0.0        -> Affects the calculation of LUFS to dB, which affects how loud or quiet the audio will be.
+			    Adding a positive number will make the audio louder, adding a negative number will make it quieter.
+			    For example, the reference loudness of ebur128 is -23.00, if we set LOUDNESSOFFSET=5.00, the gain
+			    will be roughly the same as what the replaygain  (-18.00 reference) filter will calculate.
+			    Note: This only affects ebur128 and loudnorm filters.
+			    Disable by setting LOUDNESSOFFSET=0.0
+			    Defaults to LOUDNESSOFFSET=0.0
     PREVIEW=[true|false] -> If set to true, no files will be modified, values will be displayed on the console.
-                            Defaults to PREVIEW=false
+			    Defaults to PREVIEW=false
 DESCRIPTION
+# Help }}}
+
+# {{{ ENV VARS
 #########################################################################################
 ##################################### ENV VARS ##########################################
 #########################################################################################
+LC_NUMERIC=C
 VERIFY=${VERIFY:-true}
 FORCE=${FORCE:-false}
 MINSIZE=${MINSIZE:-"+0"}
@@ -113,173 +121,241 @@ PREVIEW=${PREVIEW:-false}
 #########################################################################################
 ################################### ENV VARS End ########################################
 #########################################################################################
+# ENV VARS }}}
 
-# force number handling to C
-LC_NUMERIC=C
+# {{{ Logging
+# {{{ log_message ( )
+log_message ( ) {
+    level=$1
+    case $level in
+	error)
+	    color='\e[31m'
+	    prefix='ERROR'
+	    shift
+	    ;;
+	warn|warning)
+	    color='\e[93m'
+	    prefix='WARNING'
+	    shift
+	    ;;
+	notice)
+	    color='\e[92m'
+	    prefix='NOTICE'
+	    shift
+	    ;;
+	info)
+	    color='\e[0m'
+	    prefix='INFO'
+	    shift
+	    ;;
+	*)
+	    color='\e[0m'
+	    prefix='INFO'
+	    ;;
+    esac
+    text="$*"
+    printf '%b%s\e[0m\n' "$color" "$prefix: $text"
+} >&2
+# log_message ( ) }}}
 
+log_error ( ) { log_message error "$@"; }
+log_warn ( ) { log_message warn "$@"; }
+log_notice ( ) { log_message notice "$@"; }
+log_info ( ) { log_message info "$@"; }
+# Logging }}}
+
+# {{{ match_ere ( )  # match string against extended reqex
+match_ere ( ) {
+    regex="$1" && shift
+    echo "$*" | grep -Eq "$regex"
+}
+# }}}
+
+# {{{ Checking functions
 # for more convenient regex construction
-FLOAT_ERE='[+-]?[0-9]+\.[0-9]+'
+FLOAT_ERE='[+-]?[[:digit:]]*\.[[:digit:]]+'
 
-if [[ $1 == "--help" || $1 == "-h" ]]; then
-    echo "$DESCRIPTION"
-    exit 0
-fi
-unset DESCRIPTION
+isint ( ) { match_ere '^[+-]?[[:digit:]]+$' "$1"; }
+isfloat ( ) { match_ere "^$FLOAT_ERE$" "$1"; }
+isnum ( ) { isint "$1" || isfloat "$1"; }
 
-if [[ ! $FFMPEGFILTER =~ ^(ebur128|loudnorm|replaygain)$ ]]; then
-    echo -e "\e[31mERROR: Invalid FFMPEGFILTER.\e[0m" > /dev/stderr
+cmd_exists ( ) { command -v "$1"; } >/dev/null 2>&1
+
+isMatroska ( ) { match_ere "Matroska" "$(file "$1")"; }
+# }}} Checking functions
+
+#{{{ Option parsing
+while getopts ":-:fhm:O:pV" o; do
+    __ill_v ( ) { log_error "-$1: Illegal value '$2'"; exit 1; }
+    __ill_o ( ) { log_error "Illegal option: '-$1'"; exit 1; }
+    case $o in
+	-)  # Long options MUST be delimited by '=' from their values
+	    n=$(echo "$OPTARG" | cut -d= -f1)
+	    v=$(echo "$OPTARG" | cut -d= -f2)
+	    case $n in
+		filter)
+		    { match_ere '^(ebur128|loudnorm|replaygain)$' "$v" && FFMPEGFILTER="$v"; }\
+			|| __ill_v "-$n" "$v" ;;
+		force)
+		    FORCE=true ;;
+		minsize)
+		    MINSIZE=$v ;;
+		no-verify)
+		    VERIFY=false ;;
+		peak)
+		    { match_ere '^(true|sample)$' "$v" && PEAKTYPE="$v"; }\
+			|| __ill_v "-$n" "$v" ;;
+		help)
+		    print_help && exit ;;
+		*)
+		    __ill_o "-$n"
+	    esac
+	    ;;
+	f)  FORCE=true ;;
+	m)  { isnum "$OPTARG" && MINSIZE=$OPTARG; } || __ill_v "$o" "$OPTARG" ;;
+	O)  { isnum "$OPTARG" && LOUDNESSOFFSET=$OPTARG; } || __ill_v "$o" "$OPTARG" ;;
+	p)  PREVIEW=true ;;
+	V)  VERIFY=false ;;
+	h)  print_help && exit ;;
+	\?) __ill_o "$OPTARG"
+    esac
+done
+shift $((OPTIND-1))
+#}}} Option parsing
+
+# {{{ Initial checks
+if ! match_ere '^(ebur128|loudnorm|replaygain)$' "$FFMPEGFILTER"; then
+    log_error "Invalid FFMPEGFILTER."
     exit 2
 fi
 
-if [[ ! $PEAKTYPE =~ ^(sample|true)$ ]]; then
-    echo -e "\e[31mERROR: PEAKTYPE must be either sample or true.\e[0m" > /dev/stderr
+if ! match_ere '^(sample|true)$' "$PEAKTYPE"; then
+    log_error "PEAKTYPE must be either sample or true."
     exit 3
 fi
 
-if [[ ! $LOUDNESSOFFSET =~ ^\-?[0-9]+\.[0-9]+$ ]]; then
-    echo -e "\e[31mERROR: Invalid value for LOUDNESSOFFSET.\e[0m" > /dev/stderr
+if ! isnum "$LOUDNESSOFFSET"; then
+    log_error "Invalid value for LOUDNESSOFFSET."
     exit 4
 fi
 
-if ! command -v "$FFMPEG" &> /dev/null; then
-    echo -e "\e[31mERROR: Unable to find the ffmpeg executable.\e[0m" > /dev/stderr
+if ! cmd_exists "$FFMPEG"; then
+    log_error "Unable to find the ffmpeg executable."
     exit 5
 fi
 
-reqProgs="awk file find grep mkvpropedit mktemp sed"
 for reqProg in $reqProgs; do
-    if ! command -v "$reqProg" &> /dev/null; then
-        echo -e "\e[31mERROR: This program could not be found: $reqProg\e[0m" > /dev/stderr
-        exit 6
+    if ! cmd_exists "$reqProg"; then
+	log_error "This program could not be found: $reqProg"
+	exit 6
     fi
 done
 unset reqProg reqProgs
+# Initial checks }}}
 
+#{{{ Create temporary file
 tmpFile="$(mktemp)"
-if [[ ! -f $tmpFile ]] || [[ ! -w $tmpFile ]]; then
-    echo -e "\e[31mERROR: Could not create temp file $tmpFile. Check permissions.\e[0m" > /dev/stderr
+if [ ! -w "$tmpFile" ]; then
+    log_error "Could not create temp file $tmpFile. Check permissions."
     exit 7
 fi
+# Create temporary file }}}
 
-REFLOUDNESS="-23.00"
-[[ $FFMPEGFILTER == "loudnorm" ]] && REFLOUDNESS="-24.00"
-[[ $FFMPEGFILTER == "replaygain" ]] && REFLOUDNESS="-18.00"
-[[ $FFMPEGFILTER != "replaygain" ]] && REFLOUDNESS="$(printf "%0.2f" "$(awk "BEGIN{print ($REFLOUDNESS + $LOUDNESSOFFSET)}")")"
-VERIFY_CHECK="${REPLAYGAIN_ALGORITHM}: ${FFMPEGFILTER}"
+#{{{ cleantmp ( )
+cleantmp ( ) {
+    exit_code=$?
+    log_info "Caught signal $1, cleaning up."
+    [ -f "$muxInFile" ] && [ -f "$muxOutFile" ] && rm "$muxOutFile"
+    rm "$tmpFile"
+    trap - EXIT
+    exit $exit_code
+}
+#}}} cleantmp ( ) 
+for sig in HUP INT QUIT TERM EXIT; do
+    # shellcheck disable=2064
+    trap "cleantmp $sig" "$sig"
+done
 
-trap cleantmp SIGHUP SIGINT SIGQUIT SIGTERM
-function cleantmp() {
-    [[ -f $muxInFile && -f $muxOutFile ]] && rm -f "$muxOutFile"
-    rm -f "$tmpFile"
-    [[ -n $1 ]] && exit "$1" || exit 1
+#{{{ Set reference loudness
+REFLOUDNESS=-23.00
+case "$FFMPEGFILTER" in
+    loudnorm)	REFLOUDNESS=-24.00 ;;
+    replaygain)	REFLOUDNESS=-18.00 ;;
+esac
+
+[ "$FFMPEGFILTER" != "replaygain" ] &&
+    REFLOUDNESS=$(awk "BEGIN{print $REFLOUDNESS + $LOUDNESSOFFSET}")
+# Set reference loudness }}}
+
+#{{{ Math functions
+lufsTodB ( ) {
+    isnum "$1" || return 1
+    awk "BEGIN{print $REFLOUDNESS - $1}"
 }
 
-function lufsTodB() {
-    [[ $1 =~ ^$ ]] && echo "" && return
-    printf "%0.2f" "$(awk "BEGIN{print ($REFLOUDNESS - $1)}")"
-}
-
-function dBToLufs() {
+dBToLufs ( ) {
     lufsTodB "$1"
 }
 
-function dBtoAmplitude() {
-    [[ $1 =~ ^$ ]] && $1 && echo "" && return
-    printf "%06f" "$(awk "BEGIN{print 10^($1/20)}")"
+dBtoAmplitude ( ) {
+    isnum "$1" || return 1
+    awk "BEGIN{print 10^($1/20)}"
 }
 
-function amplitudeToDB() {
-    [[ $1 =~ ^$ ]] && $1 && echo "" && return
-    printf "%0.2f" "$(awk "BEGIN{print 20*log($1)/log(10)}")"
+amplitudeToDB ( ) {
+    isnum "$1" || return 1
+    awk "BEGIN{print 20*log($1)/log(10)}"
 }
+#}}} Math functions
 
-function isMatroska() {
-     [[ $(file "$1") =~ "Matroska" ]] && return 0 || return 1
-}
-
-function filePos() {
-    [[ ! $fileIter =~ ^[0-9]+$ ]] || [[ ! ${#files[@]} =~ ^[0-9]+$ ]] && return;
-    echo "(file $fileIter of ${#files[@]}, $(awk "BEGIN{print 100*($fileIter/${#files[@]})}")%)"
-}
-
-if [[ $PREVIEW == false && $REMUX == true ]]; then
-    REGEX="$(echo "(^.*)\.(asf|avi|flv|m4[pv]|mp[4g]|mov|mpeg|m2?ts|ogv|qt|ts|vob|webm|wmv)$" | sed 's/\([()|]\)/\\\1/g')"
-    mapfile -t files < <(find "$@" -type f -size "$MINSIZE" -iregex "$REGEX")
-    for muxInFile in "${files[@]}"; do
-        ((fileIter++))
-        isMatroska "$muxInFile" && continue
-        muxOutFile=${muxInFile%.*}.mkv
-        if [ -e "$muxOutFile" ]; then
-            unset muxInFile muxOutFile
-            continue
-        fi
-        echo "INFO: Remuxing '$muxInFile' to '$muxOutFile' $(filePos)."
-        if "$FFMPEG" -n -loglevel error -stats -nostdin -hide_banner -i "$muxInFile" -c copy -map 0 "$muxOutFile"; then
-            rm -f "$muxInFile"
-        else
-            rm -f "$muxOutFile"
-        fi
-        unset muxInFile muxOutFile
-    done
-    unset REGEX files fileIter
-fi
-
-mapfile -t files < <(find "$@" -type f -size "$MINSIZE" \( -iname "*.mk[av]" -o -iname "*.mk3d" \))
-filesProcessed=0
-for file in "${files[@]}"; do
-    ((fileIter++))
-    if ! isMatroska "$file"; then
-        echo -e "\e[92mNOTICE: '$file' is not a matroska file $(filePos).\e[0m"
-        continue
-    fi
-
-    ffmpegOut=$("$FFMPEG" -nostdin -hide_banner -i "$file" 2>&1)
-    if [[ ! $FORCE == true ]] && [[ $VERIFY == true ]] && [[ "$ffmpegOut" =~ $VERIFY_CHECK ]]; then
-        echo -e "\e[92mNOTICE: Skipping, replaygain tags already exist on file '$file' $(filePos).\e[0m"
-        continue
-    fi
-
+#{{{ tag_tracks ( )  # Calculate RG and tag file
+tag_tracks ( ) {
+    file="$1"
     tracks=$(ffprobe -v error -of default=nw=1:nk=1 -select_streams a -show_entries stream=index "$file")
 
+    #{{{ track loop
     tracksProcessed=0
     for track in $tracks; do
-        echo "INFO: Running ffmpeg using filter ${FFMPEGFILTER}, this can take a while. (track $track on file '$file') $(filePos) (REFLOUDNESS = $REFLOUDNESS LUFS)"
+	#{{{ gain calculation
+        log_info "Running ffmpeg using filter ${FFMPEGFILTER}, this can take a while. (track $track on file '$file') $_filePos (REFLOUDNESS = $REFLOUDNESS LUFS)"
         ffmpegCmd="$FFMPEG -loglevel info -nostats -nostdin -hide_banner -i \"$file\" -map 0:$track -filter:a \""
-        if [[ $FFMPEGFILTER == "ebur128" ]]; then
+        if [ "$FFMPEGFILTER" = "ebur128" ]; then
             ffmpegCmd="${ffmpegCmd}ebur128=peak=$PEAKTYPE:framelog=quiet\" -f null -"
             echo "$ffmpegCmd"
             ffmpegOut=$(eval "$ffmpegCmd" 2>&1 | tr "\n" " " | sed "s/^.*\(Parsed_ebur128.*$\)/\1/" | sed "s/ \+/ /g")
             echo "$ffmpegOut"
-            trackGain=$(lufsTodB "$(echo "$ffmpegOut" | grep -Po " I: $FLOAT_ERE LUFS" | cut -d\  -f3)")
-            trackPeak=$(dBtoAmplitude "$(echo "$ffmpegOut" | grep -Po " Peak: $FLOAT_ERE dBFS" | cut -d\  -f3)")
-            trackRange=$(printf "%0.2f" "$(echo "$ffmpegOut" | grep -Po " Loudness range: LRA: $FLOAT_ERE LU" | cut -d\  -f5)")
-        elif [[ $FFMPEGFILTER == "loudnorm" ]]; then
+            trackGain=$(lufsTodB "$(echo "$ffmpegOut" | grep -Eo " I: $FLOAT_ERE LUFS" | cut -d\  -f3)")
+            trackPeak=$(dBtoAmplitude "$(echo "$ffmpegOut" | grep -Eo " Peak: $FLOAT_ERE dBFS" | cut -d\  -f3)")
+            trackRange=$(echo "$ffmpegOut" | grep -Eo " Loudness range: LRA: $FLOAT_ERE LU" | cut -d\  -f5)
+        elif [ "$FFMPEGFILTER" = "loudnorm" ]; then
             ffmpegCmd="${ffmpegCmd}loudnorm=print_format=summary\" -f null -"
             echo "$ffmpegCmd"
             ffmpegOut=$(eval "$ffmpegCmd" 2>&1 | tr "\n" " " | sed "s/^.*\(Parsed_loudnorm.*$\)/\1/" | sed "s/ \+/ /g")
             echo "$ffmpegOut"
-            trackGain=$(lufsTodB "$(echo "$ffmpegOut" | grep -Po "Input Integrated: $FLOAT_ERE LUFS" | cut -d\  -f3)")
-            trackPeak=$(dBtoAmplitude "$(echo "$ffmpegOut" | grep -Po "Input True Peak: $FLOAT_ERE dBTP" | cut -d\  -f4)")
-            trackRange=$(printf "%0.2f" "$(echo "$ffmpegOut" | grep -Po "Input LRA: $FLOAT_ERE LU" | cut -d\  -f3)")
-        elif [[ $FFMPEGFILTER == "replaygain" ]]; then
+            trackGain=$(lufsTodB "$(echo "$ffmpegOut" | grep -Eo "Input Integrated: $FLOAT_ERE LUFS" | cut -d\  -f3)")
+            trackPeak=$(dBtoAmplitude "$(echo "$ffmpegOut" | grep -Eo "Input True Peak: $FLOAT_ERE dBTP" | cut -d\  -f4)")
+            trackRange=$(echo "$ffmpegOut" | grep -Eo "Input LRA: $FLOAT_ERE LU" | cut -d\  -f3)
+        elif [ "$FFMPEGFILTER" = "replaygain" ]; then
             ffmpegCmd="${ffmpegCmd}replaygain\" -f null -"
             echo "$ffmpegCmd"
             ffmpegOut=$(eval "$ffmpegCmd" 2>&1 | sed "s/track_gain = -24.00 dB//" | sed "s/track_peak = 0.000000//")
-            trackGain=$(echo "$ffmpegOut" | grep -Po "track_gain = $FLOAT_ERE dB" | cut -d\  -f3 | sed "s/^+//")
-            trackPeak=$(echo "$ffmpegOut" | grep -Po "track_peak = $FLOAT_ERE" | cut -d\  -f3)
+            trackGain=$(echo "$ffmpegOut" | grep -Eo "track_gain = $FLOAT_ERE dB" | cut -d\  -f3 | sed "s/^+//")
+            trackPeak=$(echo "$ffmpegOut" | grep -Eo "track_peak = $FLOAT_ERE" | cut -d\  -f3)
         else
             exit 8
         fi
-        if [[ $trackGain == "" || $trackPeak == "" ]]; then
-            echo -e "\e[92mNOTICE: Problem finding $FFMPEGFILTER info from ffmpeg for track $track on file '$file' $(filePos).\e[0m"
+        if [ "$trackGain" = "" ] || [ "$trackPeak" = "" ]; then
+            log_notice "Problem finding $FFMPEGFILTER info from ffmpeg for track $track on file '$file' $_filePos."
             continue
         fi
-        echo "INFO: Found: Gain ($trackGain dB | $(dBToLufs "$trackGain") LUFS), peak ($trackPeak amplitude | $(amplitudeToDB "$trackPeak") dB) for track $track on file '$file' $(filePos)."
-        if [[ $PREVIEW == true ]]; then
-            echo "INFO: PREVIEW mode is on, not applying tags, skipping to next track/file."
+        log_info "Found: Gain ($trackGain dB | $(dBToLufs "$trackGain") LUFS), peak ($trackPeak amplitude | $(amplitudeToDB "$trackPeak") dB) for track $track on file '$file' $_filePos."
+        if [ "$PREVIEW" = true ]; then
+            log_info "PREVIEW mode is on, not applying tags, skipping to next track/file."
             continue
         fi
+	#}}} gain calculation
 
+	#{{{ track tag generation
         echo "<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>
             <!DOCTYPE Tags SYSTEM \"matroskatags.dtd\">
             <Tags>
@@ -292,21 +368,21 @@ for file in "${files[@]}"; do
                     </Simple>
                     <Simple>
                         <Name>REPLAYGAIN_REFERENCE_LOUDNESS</Name>
-                        <String>$REFLOUDNESS LUFS</String>
+			<String>$(printf '%0.2f LUFS' "$REFLOUDNESS")</String>
                     </Simple>
                     <Simple>
                         <Name>REPLAYGAIN_TRACK_GAIN</Name>
-                        <String>$trackGain dB</String>
+			<String>$(printf '%0.2f dB' "$trackGain")</String>
                     </Simple>
                     <Simple>
                         <Name>REPLAYGAIN_TRACK_PEAK</Name>
-                        <String>$trackPeak</String>
+			<String>$(printf '%06f' "$trackPeak")</String>
                     </Simple>" > "$tmpFile"
-        if [[ $trackRange != "" ]]; then
+        if [ "$trackRange" != "" ]; then
             echo "
                     <Simple>
                         <Name>REPLAYGAIN_TRACK_RANGE</Name>
-                        <String>$trackRange dB</String>
+			<String>$(printf '%06f dB' "$trackRange")</String>
                     </Simple>" >> "$tmpFile"
         fi
         echo "
@@ -316,13 +392,90 @@ for file in "${files[@]}"; do
         sed -i "s/^            //g" "$tmpFile"
         sed -i "/^[[:space:]]*$/d" "$tmpFile"
         mkvpropedit --tags track:"$((track+1))":"$tmpFile" "$file"
-        if [[ $VERIFY == true ]] && [[ ! $("$FFMPEG" -nostdin -hide_banner -i "$file" 2>&1) =~ $VERIFY_CHECK ]]; then
-            echo -e "\e[93mWARNING: Replaygain has not been applied for track $track on file '$file' $(filePos).\e[0m"
+	# FIXME: Needs actual check of values
+        if [ "$VERIFY" = true ] && ! match_ere "$VERIFY_CHECK" "$("$FFMPEG" -nostdin -hide_banner -i "$file" 2>&1)"; then
+            log_warn "Replaygain has not been applied for track $track on file '$file' $_filePos."
             continue
         fi
-        echo "INFO: Succesfully applied replaygain tags for track $track on file '$file' $(filePos)."
-        ((tracksProcessed++))
+        log_info "Succesfully applied replaygain tags for track $track on file '$file' $_filePos."
+	#}}} track tag generation
+        tracksProcessed=$((tracksProcessed+1))
+    done; [ $tracksProcessed -gt 0 ] && filesProcessed=$(( filesProcessed + 1 ))
+    #}}} track loop
+}
+#}}} tag_tracks ( )
+
+#{{{ filePos ( )  # Show progress
+filePos ( ) {
+    fileIter=$1
+    num_files=$2
+    ! isint "$fileIter" || ! isint "$num_files" && return 1;
+    echo "(file $fileIter of $num_files, $(awk "BEGIN{print 100*($fileIter/$num_files)}")%)"
+}
+#}}} filePos ( )
+
+#{{{ Remux files
+if [ "$PREVIEW" = false ] && [ "$REMUX" = true ]; then
+    REGEX="(^.*)\.(asf|avi|flv|m4[pv]|mp[4g]|mov|mpeg|m2?ts|ogv|qt|ts|vob|webm|wmv)$"
+    files=$(find "$@" -type f -size "$MINSIZE" -regextype posix-extended -iregex "$REGEX")
+    num_files=$(echo "$files" | wc -l)
+    fileIter=0
+    IFS_=$IFS
+    # newline as IFS
+    IFS="$(printf '\n\r')"
+    for muxInFile in $files; do
+	IFS=$IFS_
+	fileIter=$((fileIter+1))
+	_filePos=$(filePos "$fileIter" "$num_files")
+	isMatroska "$muxInFile" && continue
+	muxOutFile=${muxInFile%.*}.mkv
+        if [ -e "$muxOutFile" ]; then
+            unset muxInFile muxOutFile
+            continue
+        fi
+        log_info "Remuxing '$muxInFile' to '$muxOutFile' $_filePos."
+        if "$FFMPEG" -n -loglevel error -stats -nostdin -hide_banner -i "$muxInFile" -c copy -map 0 "$muxOutFile"; then
+            rm "$muxInFile"
+	    tag_tracks "$muxOutFile"
+        else
+	    log_error "Something went wrong while muxing $muxOutFile, deleting."
+            rm "$muxOutFile"
+        fi
+        unset muxInFile muxOutFile
     done
-    [[ $tracksProcessed -gt 0 ]] && ((filesProcessed++))
+    unset REGEX files fileIter
+fi
+#}}} Remux files
+
+#{{{ Main action: Calculating gain and tagging files
+VERIFY_CHECK="${REPLAYGAIN_ALGORITHM}: ${FFMPEGFILTER}"
+filesProcessed=0
+# FIXME: if there were non-mkv files in $@ find will throw an error because they got remuxed
+files=$(find "$@" -type f -size "$MINSIZE" \( -iname "*.mk[av]" -o -iname "*.mk3d" \))
+num_files=$(printf '%s\n' "$files" | wc -l)
+fileIter=0
+IFS_=$IFS
+# newline as IFS
+IFS="$(printf '\n\r')"
+#{{{ file loop
+for file in $files; do
+    IFS=$IFS_
+    fileIter=$((fileIter+1))
+    _filePos=$(filePos "$fileIter" "$num_files")
+    if ! isMatroska "$file"; then
+        log_notice "'$file' is not a matroska file $_filePos."
+        continue
+    fi
+
+    ffmpegOut=$("$FFMPEG" -nostdin -hide_banner -i "$file" 2>&1)
+    if [ "$FORCE" != true ] && [ "$VERIFY" = true ] && match_ere "$VERIFY_CHECK" "$ffmpegOut"; then
+        log_notice "Skipping, replaygain tags already exist on file '$file' $_filePos."
+        continue
+    fi
+
+    tag_tracks "$file"
 done
-[[ $filesProcessed -gt 0 ]] && cleantmp 0
+#}}} file loop
+#}}} Main action: Calculating gain and tagging files
+
+# vi: sw=4 sts=4 smarttab foldmethod=marker

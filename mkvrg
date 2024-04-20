@@ -23,8 +23,7 @@ LICENSE
 
 # {{{ Help
 reqProgs="awk ffmpeg ffprobe file find grep mkvpropedit mktemp sed"
-[ "$1" = "--help" ] || [ "$1" = "-h" ] &&
-    { cat; exit; } <<DESCRIPTION
+print_help ( ) { cat; } >&2 <<DESCRIPTION
     mkvrg - Apply replaygain tags to matroska files without remuxing (gain is calculated using ffmpeg and tags are applied using mkvpropedit).
 
     Bash script for analyzing audio tracks in matroska files with ffmpeg and
@@ -48,60 +47,60 @@ reqProgs="awk ffmpeg ffprobe file find grep mkvpropedit mktemp sed"
     ./mkvrg test.mkv              ; Process test.mkv in current folder.
     ./mkvrg Videos/               ; Recursive search in Videos folder for matroska files.
     ./mkvrg test.mkv Videos/      ; Process test.mkv in current folder and recursive
-                                    search in Videos folder for matroska files.
+				    search in Videos folder for matroska files.
     FORCE=true ./mkvrg test.mkv   ; Process test.mkv even if it already has replaygain tags.
     MINSIZE=+100M ./mkvrg         ; Recursive search in current folder for matroska
-                                    files larger than 100MiB.
+				    files larger than 100MiB.
     FFMPEGFILTER=loudnorm ./mkvrg ; Use loudnorm ffmpeg filter to scan found files.
 
     Environment Variables:
 
     VERIFY=[true|false]  -> Check if the file already has tags or if tags were written succesfully.
-                            Defaults to VERIFY=true
+			    Defaults to VERIFY=true
     FORCE=[true|false]   -> Force mkvrg to process matroska files, even if they already have replaygain tags.
-                            If VERIFY=false, files will always be processed.
-                            Defaults to FORCE=false
+			    If VERIFY=false, files will always be processed.
+			    Defaults to FORCE=false
     MINSIZE=+[0-9][KMBG] -> Minimum matroska file size to work on.
-                            Set to MINSIZE=+0 to disable.
-                            For example, set MINSIZE=+50M to ignore files under 50MB.
-                            Defaults to MINSIZE=+0
+			    Set to MINSIZE=+0 to disable.
+			    For example, set MINSIZE=+50M to ignore files under 50MB.
+			    Defaults to MINSIZE=+0
     REMUX=[true|false]   -> Remux non matroska files to .mkv before scanning for .mkv files.
-                            Defaults to REMUX=false
+			    Defaults to REMUX=false
     FFMPEG=[path]        ->  Which ffmpeg executable to use.
-                            Set to FFMPEG=ffmpeg to use the one in PATH.
-                            For example, set to FFMPEG=/home/user/ffmpeg/ffmpeg
-                            Defaults to FFMPEG=ffmpeg
+			    Set to FFMPEG=ffmpeg to use the one in PATH.
+			    For example, set to FFMPEG=/home/user/ffmpeg/ffmpeg
+			    Defaults to FFMPEG=ffmpeg
     FFMPEGFILTER=        ->
-        [ebur128|loudnorm|replaygain]
-                            Which ffmpeg filter to use for scanning the audio.
-                            Each filter calculates the gain/peak differently.
-                            Lower reference loudness = quieter output (replaygain will be louder than ebur128 for example).
-                            Faster speed = less time it takes to scan the audio.
-                            replaygain: Speed:               Fast.      Roughly 10x faster than loudnorm.
-                                        Reference loudness: -18.00 LUFS
-                            ebur128:    Speed:               Normal.    Roughly 5x faster than loudnorm.
-                                                                        Note: This is with true peak calculation, which is slower.
-                                        Reference loudness: -23.00 LUFS
-                            loudnorm:   Speed:               Slow.
-                                        Reference loudness: -24.00 LUFS
-                            Defaults to FFMPEGFILTER=ebur128
+	[ebur128|loudnorm|replaygain]
+			    Which ffmpeg filter to use for scanning the audio.
+			    Each filter calculates the gain/peak differently.
+			    Lower reference loudness = quieter output (replaygain will be louder than ebur128 for example).
+			    Faster speed = less time it takes to scan the audio.
+			    replaygain: Speed:               Fast.      Roughly 10x faster than loudnorm.
+					Reference loudness: -18.00 LUFS
+			    ebur128:    Speed:               Normal.    Roughly 5x faster than loudnorm.
+									Note: This is with true peak calculation, which is slower.
+					Reference loudness: -23.00 LUFS
+			    loudnorm:   Speed:               Slow.
+					Reference loudness: -24.00 LUFS
+			    Defaults to FFMPEGFILTER=ebur128
     PEAKTYPE=            ->
-         [true|sample]
-                            Type of peak calculation to use.
-                            Note: Only used for ebur128 filter.
-                            sample : Faster but less accurate. Varies from file to file, but can be up to 2x faster in testing.
-                            true : Slower but accurate.
-                            Defaults to PEAKTYPE=true
+	 [true|sample]
+			    Type of peak calculation to use.
+			    Note: Only used for ebur128 filter.
+			    sample : Faster but less accurate. Varies from file to file, but can be up to 2x faster in testing.
+			    true : Slower but accurate.
+			    Defaults to PEAKTYPE=true
     LOUDNESSOFFSET=
-          [+-]0.0        -> Affects the calculation of LUFS to dB, which affects how loud or quiet the audio will be.
-                            Adding a positive number will make the audio louder, adding a negative number will make it quieter.
-                            For example, the reference loudness of ebur128 is -23.00, if we set LOUDNESSOFFSET=5.00, the gain
-                            will be roughly the same as what the replaygain  (-18.00 reference) filter will calculate.
-                            Note: This only affects ebur128 and loudnorm filters.
-                            Disable by setting LOUDNESSOFFSET=0.0
-                            Defaults to LOUDNESSOFFSET=0.0
+	  [+-]0.0        -> Affects the calculation of LUFS to dB, which affects how loud or quiet the audio will be.
+			    Adding a positive number will make the audio louder, adding a negative number will make it quieter.
+			    For example, the reference loudness of ebur128 is -23.00, if we set LOUDNESSOFFSET=5.00, the gain
+			    will be roughly the same as what the replaygain  (-18.00 reference) filter will calculate.
+			    Note: This only affects ebur128 and loudnorm filters.
+			    Disable by setting LOUDNESSOFFSET=0.0
+			    Defaults to LOUDNESSOFFSET=0.0
     PREVIEW=[true|false] -> If set to true, no files will be modified, values will be displayed on the console.
-                            Defaults to PREVIEW=false
+			    Defaults to PREVIEW=false
 DESCRIPTION
 # Help }}}
 
@@ -165,6 +164,13 @@ log_notice ( ) { log_message notice "$@"; }
 log_info ( ) { log_message info "$@"; }
 # Logging }}}
 
+# {{{ match_ere ( )  # match string against extended reqex
+match_ere ( ) {
+    regex="$1" && shift
+    echo "$*" | grep -Eq "$regex"
+}
+# }}}
+
 # {{{ Checking functions
 # for more convenient regex construction
 FLOAT_ERE='[+-]?[[:digit:]]*\.[[:digit:]]+'
@@ -178,12 +184,44 @@ cmd_exists ( ) { command -v "$1"; } >/dev/null 2>&1
 isMatroska ( ) { match_ere "Matroska" "$(file "$1")"; }
 # }}} Checking functions
 
-# {{{ match_ere ( )  # match string against extended reqex
-match_ere ( ) {
-    regex="$1" && shift
-    echo "$*" | grep -Eq "$regex"
-}
-# }}}
+#{{{ Option parsing
+while getopts ":-:fhm:O:pV" o; do
+    __ill_v ( ) { log_error "-$1: Illegal value '$2'"; exit 1; }
+    __ill_o ( ) { log_error "Illegal option: '-$1'"; exit 1; }
+    case $o in
+	-)  # Long options MUST be delimited by '=' from their values
+	    n=$(echo "$OPTARG" | cut -d= -f1)
+	    v=$(echo "$OPTARG" | cut -d= -f2)
+	    case $n in
+		filter)
+		    { match_ere '^(ebur128|loudnorm|replaygain)$' "$v" && FFMPEGFILTER="$v"; }\
+			|| __ill_v "-$n" "$v" ;;
+		force)
+		    FORCE=true ;;
+		minsize)
+		    MINSIZE=$v ;;
+		no-verify)
+		    VERIFY=false ;;
+		peak)
+		    { match_ere '^(true|sample)$' "$v" && PEAKTYPE="$v"; }\
+			|| __ill_v "-$n" "$v" ;;
+		help)
+		    print_help && exit ;;
+		*)
+		    __ill_o "-$n"
+	    esac
+	    ;;
+	f)  FORCE=true ;;
+	m)  { isnum "$OPTARG" && MINSIZE=$OPTARG; } || __ill_v "$o" "$OPTARG" ;;
+	O)  { isnum "$OPTARG" && LOUDNESSOFFSET=$OPTARG; } || __ill_v "$o" "$OPTARG" ;;
+	p)  PREVIEW=true ;;
+	V)  VERIFY=false ;;
+	h)  print_help && exit ;;
+	\?) __ill_o "$OPTARG"
+    esac
+done
+shift $((OPTIND-1))
+#}}} Option parsing
 
 # {{{ Initial checks
 if ! match_ere '^(ebur128|loudnorm|replaygain)$' "$FFMPEGFILTER"; then

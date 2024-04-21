@@ -370,7 +370,7 @@ tag_tracks () {
             echo "
                     <Simple>
                         <Name>REPLAYGAIN_TRACK_RANGE</Name>
-			<String>$(printf '%06f dB' "$trackRange")</String>
+			<String>$(printf '%0.2f dB' "$trackRange")</String>
                     </Simple>" >> "$tmpFile"
         fi
         echo "

@@ -272,21 +272,12 @@ done
 #{{{ Math functions
 lufsTodB () {
     isnum "$1" || return 1
-    awk "BEGIN{print $REFLOUDNESS - $1}"
-}
-
-dBToLufs () {
-    lufsTodB "$1"
+    awk "BEGIN{printf \"%0.2f\", $REFLOUDNESS - $1}"
 }
 
 dBtoAmplitude () {
     isnum "$1" || return 1
-    awk "BEGIN{print 10^($1/20)}"
-}
-
-amplitudeToDB () {
-    isnum "$1" || return 1
-    awk "BEGIN{print 20*log($1)/log(10)}"
+    awk "BEGIN{printf \"%06f\", 10^($1/20)}"
 }
 #}}} Math functions
 
@@ -297,13 +288,14 @@ getv_ebur128 () {
 #}}} getv_ebur128 ()
 
 #{{{ get_rg_tags (file; stream_idx)
-get_rg_tags () {  # file=$1; stream_idx=$2
-    "$FFPROBE" -v error -select_streams "$2" -of default=nw=1\
-	-show_entries stream_tags "$1" | cut -d: -f2- | awk '/^REPLAYGAIN/'
+get_rg_tags () {
+    "$FFPROBE" -v error -select_streams "$2" -show_entries stream_tags "$1" |
+	awk -F= '/^TAG:REPLAYGAIN/ {sub(/^TAG:/, ""); printf "%s=\"%s\"\n", $1, $2}'
 }
 #}}} get_rg_tags (file; stream_idx)
 
 #{{{ tag_tracks ()  # Calculate RG and tag file
+REF_TAG=$(printf '%0.2f LUFS' "$REFLOUDNESS")
 tag_tracks () {
     file="$1"
     _filePos="$2"
@@ -318,9 +310,9 @@ tag_tracks () {
 	log_prefix="'$file',$track"
 
 	#{{{ Check for existing tags
-	log_debug "$log_prefix: Input track tags: $rg_tags"
 	if [ "$FORCE" != true ]; then
 	    rg_tags=$(get_rg_tags "$file" "$track")
+	    log_debug "$log_prefix: Input track tags: $rg_tags"
 	    if 
 		match_ere "REPLAYGAIN_TRACK_GAIN" "$rg_tags" &&
 		    match_ere "REPLAYGAIN_TRACK_PEAK" "$rg_tags"
@@ -338,7 +330,7 @@ tag_tracks () {
 	#{{{ value parsing
 	log_debug "$log_prefix,ebur128: $ffmpegOut"
 	trackGain=$(lufsTodB "$(getv_ebur128 "$ffmpegOut" I)")
-	log_debug "$log_prefix,gain: $trackGain dB"
+	log_debug "$log_prefix,gain: $trackGain"
 	trackPeak=$(dBtoAmplitude "$(getv_ebur128 "$ffmpegOut" Peak)")
 	log_debug "$log_prefix,peak: $trackPeak"
 	trackRange=$(getv_ebur128 "$ffmpegOut" LRA)
@@ -347,7 +339,9 @@ tag_tracks () {
             log_error "$log_prefix: Problem finding $FFMPEGFILTER $_filePos."
             continue
         fi
-	summary="gain=$trackGain dB, peak=$trackPeak, range=$trackRange LU"
+	trackGain="$trackGain dB"
+	trackRange="$(printf '%0.2f' "$trackRange") LU"
+	summary="gain=$trackGain, peak=$trackPeak, range=$trackRange"
         log_info "$log_prefix: $summary $_filePos."
         if [ "$PREVIEW" = true ]; then
             log_notice "PREVIEW mode is on, not applying tags, skipping to next track/file."
@@ -370,19 +364,19 @@ tag_tracks () {
 	        </Simple>
 	        <Simple>
 	            <Name>REPLAYGAIN_REFERENCE_LOUDNESS</Name>
-	            <String>$(printf '%0.2f LUFS' "$REFLOUDNESS")</String>
+	            <String>$REF_TAG</String>
 	        </Simple>
 	        <Simple>
 	            <Name>REPLAYGAIN_TRACK_GAIN</Name>
-	            <String>$(printf '%0.2f dB' "$trackGain")</String>
+	            <String>$trackGain</String>
 	        </Simple>
 	        <Simple>
 	            <Name>REPLAYGAIN_TRACK_PEAK</Name>
-	            <String>$(printf '%06f' "$trackPeak")</String>
+	            <String>$trackPeak</String>
 	        </Simple>
 	        <Simple>
 	            <Name>REPLAYGAIN_TRACK_RANGE</Name>
-	            <String>$(printf '%0.2f dB' "$trackRange")</String>
+	            <String>$trackRange</String>
 	        </Simple>
 	    </Tag>
 	</Tags>"
@@ -390,10 +384,25 @@ tag_tracks () {
 
 	log_debug "$log_prefix: $(printf '%s\n%s\n' "'$tmpFile':" "$(cat "$tmpFile")")"
 	log_debug "$log_prefix,mkvpropedit: $(mkvpropedit --tags track:"$((track+1))":"$tmpFile" "$file")"
-	# FIXME: Needs actual check of values; also, why would one not want to verify?
-        if [ "$VERIFY" = true ] && ! match_ere "$VERIFY_CHECK" "$("$FFMPEG" -nostdin -hide_banner -i "$file" 2>&1)"; then
-            log_warn "$log_prefix: Replaygain has not been applied $_filePos."
-            continue
+        if [ "$VERIFY" = true ]; then
+	    eval "$(get_rg_tags "$file" "$track")"
+	    if ! {
+		[ "$REPLAYGAIN_ALGORITHM" = "ebur128" ] &&
+		[ "$REPLAYGAIN_REFERENCE_LOUDNESS" = "$REF_TAG" ] &&
+		[ "$REPLAYGAIN_TRACK_GAIN" = "$trackGain" ] &&
+		[ "$REPLAYGAIN_TRACK_PEAK" = "$trackPeak" ] &&
+		[ "$REPLAYGAIN_TRACK_RANGE" = "$trackRange" ]
+	    }
+	    then
+		log_error "$log_prefix: Replaygain has not been applied $_filePos."
+		continue
+	    fi
+	    unset \
+		REPLAYGAIN_ALGORITHM \
+	       	REPLAYGAIN_REFERENCE_LOUDNESS \
+		REPLAYGAIN_TRACK_GAIN \
+		REPLAYGAIN_TRACK_PEAK \
+		REPLAYGAIN_TRACK_RANGE
         fi
         log_info "$log_prefix: Succesfully applied replaygain tags $_filePos."
 	#}}} track tag generation
@@ -413,7 +422,6 @@ filePos () {
 #}}} filePos ()
 
 #{{{ Main action: Calculating gain and tagging files
-VERIFY_CHECK="REPLAYGAIN_ALGORITHM: ${FFMPEGFILTER}"
 #{{{ file loop
 for file in "$@"; do
     i=$((i+1))

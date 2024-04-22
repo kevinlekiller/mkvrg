@@ -145,7 +145,12 @@ log_message () {
 	    ;;
     esac
     text="$*"
-    printf '%b%s\e[0m\n' "$color" "$level: $text"
+    IFS_=$IFS
+    IFS=$(printf '\n\r')
+    for line in $text; do
+	printf '%b%s\e[0m\n' "$color" "$level: $line"
+    done
+    IFS=$IFS_
 } >&2
 # log_message () }}}
 
@@ -362,14 +367,14 @@ tag_tracks () {
 	</Tags>"
 	TAGS
 
-	log_debug "$(printf '%s\n%s\n' "'$tmpFile':" "$(cat "$tmpFile")")"
-        mkvpropedit --tags track:"$((track+1))":"$tmpFile" "$file"
+	log_debug "$log_prefix: $(printf '%s\n%s\n' "'$tmpFile':" "$(cat "$tmpFile")")"
+	log_debug "$log_prefix,mkvpropedit: $(mkvpropedit --tags track:"$((track+1))":"$tmpFile" "$file")"
 	# FIXME: Needs actual check of values; also, why would one not want to verify?
         if [ "$VERIFY" = true ] && ! match_ere "$VERIFY_CHECK" "$("$FFMPEG" -nostdin -hide_banner -i "$file" 2>&1)"; then
-            log_warn "Replaygain has not been applied for track $track on file '$file' $_filePos."
+            log_warn "$log_prefix: Replaygain has not been applied $_filePos."
             continue
         fi
-        log_info "Succesfully applied replaygain tags for track $track on file '$file' $_filePos."
+        log_info "$log_prefix: Succesfully applied replaygain tags $_filePos."
 	#}}} track tag generation
         tracksProcessed=$((tracksProcessed+1))
     done; [ $tracksProcessed -gt 0 ] && filesProcessed=$(( filesProcessed + 1 ))

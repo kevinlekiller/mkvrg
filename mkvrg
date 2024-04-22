@@ -101,6 +101,7 @@ LOG_LVL=WARN
 VERIFY=true
 FORCE=false
 FFMPEG=${FFMPEG:-"ffmpeg"}
+FFPROBE=${FFPROBE:-"ffprobe"}
 FFMPEGFILTER="ebur128"
 PEAKTYPE="true"
 REFLOUDNESS="-18"
@@ -295,17 +296,19 @@ getv_ebur128 () {
 }
 #}}} getv_ebur128 ()
 
+#{{{ get_rg_tags (file; stream_idx)
+get_rg_tags () {  # file=$1; stream_idx=$2
+    "$FFPROBE" -v error -select_streams "$2" -of default=nw=1\
+	-show_entries stream_tags "$1" | cut -d: -f2- | awk '/^REPLAYGAIN/'
+}
+#}}} get_rg_tags (file; stream_idx)
+
 #{{{ tag_tracks ()  # Calculate RG and tag file
 tag_tracks () {
     file="$1"
     _filePos="$2"
-    tracks=$(ffprobe\
-	-v error\
-	-of default=nw=1:nk=1\
-	-select_streams a\
-	-show_entries stream=index\
-	"$file"
-    )
+    tracks=$($FFPROBE -v error -of default=nw=1:nk=1 -select_streams a\
+	-show_entries stream=index "$file")
 
     #{{{ track loop
     tracksProcessed=0
@@ -314,6 +317,18 @@ tag_tracks () {
 	log_prefix="'$file'"
         log_info "$log_prefix: Analyzing track $track. $_filePos"
 	log_prefix="'$file',$track"
+
+	log_debug "$log_prefix: Input track tags: $rg_tags"
+	if [ "$FORCE" != true ]; then
+	    rg_tags=$(get_rg_tags "$file" "$track")
+	    if 
+		match_ere "REPLAYGAIN_TRACK_GAIN" "$rg_tags" &&
+		    match_ere "REPLAYGAIN_TRACK_PEAK" "$rg_tags"
+	    then
+		log_notice "$log_prefix: Skipping, replaygain tags already exist. $_filePos."
+		continue
+	    fi
+	fi
         ffmpegCmd="$FFMPEG -loglevel info -nostats -nostdin -hide_banner -i \"$file\" -map 0:$track -filter:a \""
 	ffmpegCmd="${ffmpegCmd}ebur128=peak=$PEAKTYPE:framelog=quiet\" -f null -"
 	ffmpegOut=$(eval "$ffmpegCmd" 2>&1 | sed -e '0,/^\[Parsed_ebur128/d' | head -13 )
@@ -396,20 +411,13 @@ filePos () {
 #}}} filePos ()
 
 #{{{ Main action: Calculating gain and tagging files
-VERIFY_CHECK="${REPLAYGAIN_ALGORITHM}: ${FFMPEGFILTER}"
+VERIFY_CHECK="REPLAYGAIN_ALGORITHM: ${FFMPEGFILTER}"
 #{{{ file loop
 for file in "$@"; do
     i=$((i+1))
     _filePos=$(filePos $i $#)
     if ! isMatroska "$file"; then
         log_notice "'$file' is not a matroska file $_filePos."
-        continue
-    fi
-
-    ffmpegOut=$("$FFMPEG" -nostdin -hide_banner -i "$file" 2>&1)
-    # TODO: this muddies the meaning of $VERIFY; just check for $FORCE?
-    if [ "$FORCE" != true ] && [ "$VERIFY" = true ] && match_ere "$VERIFY_CHECK" "$ffmpegOut"; then
-        log_notice "Skipping, replaygain tags already exist on file '$file' $_filePos."
         continue
     fi
 

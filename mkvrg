@@ -120,9 +120,11 @@ PREVIEW=false
 # {{{ log_message ()
 log_message () {
     level=$1; shift;
-    eval LVL_INT=\$LVL_INT_"$level"
-    eval LOG_LVL_INT=\$LVL_INT_$LOG_LVL
-    [ "$LVL_INT" -gt "$LOG_LVL_INT" ] && return
+    if match_ere '^(ERROR|WARN(ING)*|NOTICE|INFO|DEBUG)$' "$level"; then
+	eval LVL_INT=\$LVL_INT_"$level"
+	eval LOG_LVL_INT=\$LVL_INT_$LOG_LVL
+	[ "$LVL_INT" -gt "$LOG_LVL_INT" ] && return
+    fi
 
     case $level in
 	ERROR)

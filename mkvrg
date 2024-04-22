@@ -77,6 +77,8 @@ Options:
 -f, --force	    Force mkvrg to process matroska files, even if they already have
 		    replaygain tags.
 
+-V, --no-verify	    Skip verification. By default mkvrg checks if the file contains the RG tags.
+
 -l, --log-level={error|warn|notice|info|debug}
 
 		    Set log level (verbosity). Default: 'warn'

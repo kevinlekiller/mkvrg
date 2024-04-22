@@ -302,26 +302,28 @@ tag_tracks () {
     tracksProcessed=0
     for track in $tracks; do
 	#{{{ gain calculation
-        log_info "'$file': Analyzing track $track. $_filePos"
+	log_prefix="'$file'"
+        log_info "$log_prefix: Analyzing track $track. $_filePos"
+	log_prefix="'$file',$track"
         ffmpegCmd="$FFMPEG -loglevel info -nostats -nostdin -hide_banner -i \"$file\" -map 0:$track -filter:a \""
 	ffmpegCmd="${ffmpegCmd}ebur128=peak=$PEAKTYPE:framelog=quiet\" -f null -"
-	# log_debug "$ffmpegCmd"
-	# ffmpegOut=$(eval "$ffmpegCmd" 2>&1 | tr "\n" " " | sed "s/^.*\(Parsed_ebur128.*$\)/\1/" | sed "s/ \+/ /g")
 	ffmpegOut=$(eval "$ffmpegCmd" 2>&1 | sed -e '0,/^\[Parsed_ebur128/d' | head -13 )
-	log_debug "ebur128: $ffmpegOut"
+	log_debug "$log_prefix,ebur128: $ffmpegOut"
 	trackGain=$(lufsTodB "$(getv_ebur128 "$ffmpegOut" I)")
-	log_debug "Gain: $trackGain dB"
+	log_debug "$log_prefix,gain: $trackGain dB"
 	trackPeak=$(dBtoAmplitude "$(getv_ebur128 "$ffmpegOut" Peak)")
-	log_debug "Peak: $trackPeak"
+	log_debug "$log_prefix,peak: $trackPeak"
 	trackRange=$(getv_ebur128 "$ffmpegOut" LRA)
-	log_debug "Range: $trackRange"
-        if [ "$trackGain" = "" ] || [ "$trackPeak" = "" ]; then
-            log_notice "Problem finding $FFMPEGFILTER info from ffmpeg for track $track on file '$file' $_filePos."
+	log_debug "$log_prefix,range: $trackRange"
+        if ! { isnum "$trackGain" && isnum "$trackPeak" && isnum "$trackRange"; } then
+            log_error "$log_prefix: Problem finding $FFMPEGFILTER $_filePos."
             continue
         fi
-        log_info "Found: Gain ($trackGain dB | $(dBToLufs "$trackGain") LUFS), peak ($trackPeak amplitude | $(amplitudeToDB "$trackPeak") dB) for track $track on file '$file' $_filePos."
+	summary="gain=$trackGain dB"
+	summary="${summary}, peak=$trackPeak ($(amplitudeToDB "$trackPeak") dB)"
+        log_info "$log_prefix: $summary $_filePos."
         if [ "$PREVIEW" = true ]; then
-            log_info "PREVIEW mode is on, not applying tags, skipping to next track/file."
+            log_notice "PREVIEW mode is on, not applying tags, skipping to next track/file."
             continue
         fi
 	#}}} gain calculation

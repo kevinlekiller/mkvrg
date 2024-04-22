@@ -308,6 +308,8 @@ tag_tracks () {
         ffmpegCmd="$FFMPEG -loglevel info -nostats -nostdin -hide_banner -i \"$file\" -map 0:$track -filter:a \""
 	ffmpegCmd="${ffmpegCmd}ebur128=peak=$PEAKTYPE:framelog=quiet\" -f null -"
 	ffmpegOut=$(eval "$ffmpegCmd" 2>&1 | sed -e '0,/^\[Parsed_ebur128/d' | head -13 )
+	#}}} gain calculation
+	#{{{ value parsing
 	log_debug "$log_prefix,ebur128: $ffmpegOut"
 	trackGain=$(lufsTodB "$(getv_ebur128 "$ffmpegOut" I)")
 	log_debug "$log_prefix,gain: $trackGain dB"
@@ -325,44 +327,40 @@ tag_tracks () {
             log_notice "PREVIEW mode is on, not applying tags, skipping to next track/file."
             continue
         fi
-	#}}} gain calculation
+	#}}} value parsing
 
 	#{{{ track tag generation
-        echo "<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>
-            <!DOCTYPE Tags SYSTEM \"matroskatags.dtd\">
-            <Tags>
-                <Tag>
-                    <Targets>
-                    </Targets>
-                    <Simple>
-                        <Name>REPLAYGAIN_ALGORITHM</Name>
-                        <String>$FFMPEGFILTER</String>
-                    </Simple>
-                    <Simple>
-                        <Name>REPLAYGAIN_REFERENCE_LOUDNESS</Name>
-			<String>$(printf '%0.2f LUFS' "$REFLOUDNESS")</String>
-                    </Simple>
-                    <Simple>
-                        <Name>REPLAYGAIN_TRACK_GAIN</Name>
-			<String>$(printf '%0.2f dB' "$trackGain")</String>
-                    </Simple>
-                    <Simple>
-                        <Name>REPLAYGAIN_TRACK_PEAK</Name>
-			<String>$(printf '%06f' "$trackPeak")</String>
-                    </Simple>" > "$tmpFile"
-        if [ "$trackRange" != "" ]; then
-            echo "
-                    <Simple>
-                        <Name>REPLAYGAIN_TRACK_RANGE</Name>
-			<String>$(printf '%0.2f dB' "$trackRange")</String>
-                    </Simple>" >> "$tmpFile"
-        fi
-        echo "
-                </Tag>
-            </Tags>" >> "$tmpFile"
+	cat > "$tmpFile" <<TAGS
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<!DOCTYPE Tags SYSTEM "matroskatags.dtd">
+<Tags>
+    <Tag>
+	<Targets>
+	</Targets>
+	<Simple>
+	    <Name>REPLAYGAIN_ALGORITHM</Name>
+	    <String>$FFMPEGFILTER</String>
+	</Simple>
+	<Simple>
+	    <Name>REPLAYGAIN_REFERENCE_LOUDNESS</Name>
+	    <String>$(printf '%0.2f LUFS' "$REFLOUDNESS")</String>
+	</Simple>
+	<Simple>
+	    <Name>REPLAYGAIN_TRACK_GAIN</Name>
+	    <String>$(printf '%0.2f dB' "$trackGain")</String>
+	</Simple>
+	<Simple>
+	    <Name>REPLAYGAIN_TRACK_PEAK</Name>
+	    <String>$(printf '%06f' "$trackPeak")</String>
+	</Simple>
+	<Simple>
+	    <Name>REPLAYGAIN_TRACK_RANGE</Name>
+	    <String>$(printf '%0.2f dB' "$trackRange")</String>
+	</Simple>
+    </Tag>
+</Tags>"
+TAGS
 
-        sed -i "s/^            //g" "$tmpFile"
-        sed -i "/^[[:space:]]*$/d" "$tmpFile"
         mkvpropedit --tags track:"$((track+1))":"$tmpFile" "$file"
 	# FIXME: Needs actual check of values; also, why would one not want to verify?
         if [ "$VERIFY" = true ] && ! match_ere "$VERIFY_CHECK" "$("$FFMPEG" -nostdin -hide_banner -i "$file" 2>&1)"; then

@@ -248,7 +248,7 @@ fi
 #{{{ cleantmp ()
 cleantmp () {
     exit_code=$?
-    log_info "Caught signal $1, cleaning up."
+    log_debug "Caught signal $1, cleaning up."
     rm "$tmpFile"
     trap - EXIT
     exit $exit_code
@@ -308,10 +308,11 @@ tag_tracks () {
 	# log_debug "$ffmpegCmd"
 	# ffmpegOut=$(eval "$ffmpegCmd" 2>&1 | tr "\n" " " | sed "s/^.*\(Parsed_ebur128.*$\)/\1/" | sed "s/ \+/ /g")
 	ffmpegOut=$(eval "$ffmpegCmd" 2>&1 | sed -e '0,/^\[Parsed_ebur128/d' | head -13 )
-	log_debug "$ffmpegOut"
+	log_debug "ebur128: $ffmpegOut"
 	trackGain=$(lufsTodB "$(getv_ebur128 "$ffmpegOut" I)")
+	log_debug "Gain: $trackGain dB"
 	trackPeak=$(dBtoAmplitude "$(getv_ebur128 "$ffmpegOut" Peak)")
-	log_debug "$trackPeak"
+	log_debug "Peak: $trackPeak"
 	trackRange=$(getv_ebur128 "$ffmpegOut" LRA)
 	log_debug "Range: $trackRange"
         if [ "$trackGain" = "" ] || [ "$trackPeak" = "" ]; then

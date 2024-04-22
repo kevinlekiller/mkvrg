@@ -313,11 +313,11 @@ tag_tracks () {
     #{{{ track loop
     tracksProcessed=0
     for track in $tracks; do
-	#{{{ gain calculation
 	log_prefix="'$file'"
         log_info "$log_prefix: Analyzing track $track. $_filePos"
 	log_prefix="'$file',$track"
 
+	#{{{ Check for existing tags
 	log_debug "$log_prefix: Input track tags: $rg_tags"
 	if [ "$FORCE" != true ]; then
 	    rg_tags=$(get_rg_tags "$file" "$track")
@@ -329,10 +329,12 @@ tag_tracks () {
 		continue
 	    fi
 	fi
-        ffmpegCmd="$FFMPEG -loglevel info -nostats -nostdin -hide_banner -i \"$file\" -map 0:$track -filter:a \""
-	ffmpegCmd="${ffmpegCmd}ebur128=peak=$PEAKTYPE:framelog=quiet\" -f null -"
-	ffmpegOut=$(eval "$ffmpegCmd" 2>&1 | sed -e '0,/^\[Parsed_ebur128/d' | head -13 )
-	#}}} gain calculation
+	#}}} Check for existing tags
+
+	ffmpegOut=$("$FFMPEG" -v info -nostats -nostdin -hide_banner -i "$file" \
+	    -map 0:"$track" -filter:a ebur128=peak="$PEAKTYPE":framelog=quiet -f null - 2>&1 |
+	    sed -e '0,/^\[Parsed_ebur128/d' | head -13 )
+
 	#{{{ value parsing
 	log_debug "$log_prefix,ebur128: $ffmpegOut"
 	trackGain=$(lufsTodB "$(getv_ebur128 "$ffmpegOut" I)")

@@ -330,37 +330,39 @@ tag_tracks () {
 	#}}} value parsing
 
 	#{{{ track tag generation
-	cat > "$tmpFile" <<TAGS
-<?xml version="1.0" encoding="ISO-8859-1"?>
-<!DOCTYPE Tags SYSTEM "matroskatags.dtd">
-<Tags>
-    <Tag>
-	<Targets>
-	</Targets>
-	<Simple>
-	    <Name>REPLAYGAIN_ALGORITHM</Name>
-	    <String>$FFMPEGFILTER</String>
-	</Simple>
-	<Simple>
-	    <Name>REPLAYGAIN_REFERENCE_LOUDNESS</Name>
-	    <String>$(printf '%0.2f LUFS' "$REFLOUDNESS")</String>
-	</Simple>
-	<Simple>
-	    <Name>REPLAYGAIN_TRACK_GAIN</Name>
-	    <String>$(printf '%0.2f dB' "$trackGain")</String>
-	</Simple>
-	<Simple>
-	    <Name>REPLAYGAIN_TRACK_PEAK</Name>
-	    <String>$(printf '%06f' "$trackPeak")</String>
-	</Simple>
-	<Simple>
-	    <Name>REPLAYGAIN_TRACK_RANGE</Name>
-	    <String>$(printf '%0.2f dB' "$trackRange")</String>
-	</Simple>
-    </Tag>
-</Tags>"
-TAGS
+	# DO NOT touch the indent tabs/spaces!!!
+	cat > "$tmpFile" <<-TAGS
+	<?xml version="1.0" encoding="ISO-8859-1"?>
+	<!DOCTYPE Tags SYSTEM "matroskatags.dtd">
+	<Tags>
+	    <Tag>
+	        <Targets>
+	        </Targets>
+	        <Simple>
+	            <Name>REPLAYGAIN_ALGORITHM</Name>
+	            <String>$FFMPEGFILTER</String>
+	        </Simple>
+	        <Simple>
+	            <Name>REPLAYGAIN_REFERENCE_LOUDNESS</Name>
+	            <String>$(printf '%0.2f LUFS' "$REFLOUDNESS")</String>
+	        </Simple>
+	        <Simple>
+	            <Name>REPLAYGAIN_TRACK_GAIN</Name>
+	            <String>$(printf '%0.2f dB' "$trackGain")</String>
+	        </Simple>
+	        <Simple>
+	            <Name>REPLAYGAIN_TRACK_PEAK</Name>
+	            <String>$(printf '%06f' "$trackPeak")</String>
+	        </Simple>
+	        <Simple>
+	            <Name>REPLAYGAIN_TRACK_RANGE</Name>
+	            <String>$(printf '%0.2f dB' "$trackRange")</String>
+	        </Simple>
+	    </Tag>
+	</Tags>"
+	TAGS
 
+	log_debug "$(printf '%s\n%s\n' "'$tmpFile':" "$(cat "$tmpFile")")"
         mkvpropedit --tags track:"$((track+1))":"$tmpFile" "$file"
 	# FIXME: Needs actual check of values; also, why would one not want to verify?
         if [ "$VERIFY" = true ] && ! match_ere "$VERIFY_CHECK" "$("$FFMPEG" -nostdin -hide_banner -i "$file" 2>&1)"; then

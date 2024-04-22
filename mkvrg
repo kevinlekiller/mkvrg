@@ -282,7 +282,7 @@ amplitudeToDB () {
 
 #{{{ getv_ebur128 ()
 getv_ebur128 () {
-    echo "$1" | sed -En "s/^[[:space:]]+${2}:[[:space:]]+($FLOAT_ERE) (dB|LU)(FS)?$/\1/p"
+    echo "$1" | awk "/^[[:space:]]+${2}:/ {print \$2}"
 }
 #}}} getv_ebur128 ()
 

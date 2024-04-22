@@ -107,42 +107,37 @@ PREVIEW=false
 # {{{ Logging
 # {{{ log_message ()
 log_message () {
-    level=$1
+    level=$1; shift;
     case $level in
-	error)
+	ERROR)
 	    color='\e[31m'
-	    prefix='ERROR'
-	    shift
 	    ;;
-	warn|warning)
+	WARN|WARNING)
 	    color='\e[93m'
-	    prefix='WARNING'
-	    shift
 	    ;;
-	notice)
+	NOTICE)
 	    color='\e[92m'
-	    prefix='NOTICE'
-	    shift
 	    ;;
-	info)
+	INFO)
 	    color='\e[0m'
-	    prefix='INFO'
-	    shift
+	    ;;
+	DEBUG)
+	    color='\e[0m'
 	    ;;
 	*)
 	    color='\e[0m'
-	    prefix='INFO'
 	    ;;
     esac
     text="$*"
-    printf '%b%s\e[0m\n' "$color" "$prefix: $text"
+    printf '%b%s\e[0m\n' "$color" "$level: $text"
 } >&2
 # log_message () }}}
 
-log_error () { log_message error "$@"; }
-log_warn () { log_message warn "$@"; }
-log_notice () { log_message notice "$@"; }
-log_info () { log_message info "$@"; }
+log_error () { log_message ERROR "$@"; }
+log_warn () { log_message WARN "$@"; }
+log_notice () { log_message NOTICE "$@"; }
+log_info () { log_message INFO "$@"; }
+log_debug () { log_message DEBUG "$@"; }
 # Logging }}}
 
 # {{{ match_ere ()  # match string against extended reqex
@@ -166,9 +161,9 @@ isMatroska () { match_ere "Matroska" "$(file "$1")"; }
 # }}} Checking functions
 
 #{{{ Option parsing
+__ill_v () { echo "$(basename "$0"): invalid argument '$2' for '-$1'"; usage; exit 1; } >&2
+__ill_o () { echo "$(basename "$0"): invalid option '-$1'"; usage; exit 1; }
 while getopts ":-:fhpR:V" o; do
-    __ill_v () { echo "$(basename "$0"): invalid argument '$2' for '-$1'"; usage; exit 1; } >&2
-    __ill_o () { echo "$(basename "$0"): invalid option '-$1'"; usage; exit 1; }
     case $o in
 	-)  # Long options MUST be delimited by '=' from their values
 	    n=$(echo "$OPTARG" | cut -d= -f1)
@@ -261,25 +256,40 @@ amplitudeToDB () {
 }
 #}}} Math functions
 
+#{{{ getv_ebur128 ()
+getv_ebur128 () {
+    echo "$1" | sed -En "s/^[[:space:]]+${2}:[[:space:]]+($FLOAT_ERE) (dB|LU)(FS)?$/\1/p"
+}
+#}}} getv_ebur128 ()
+
 #{{{ tag_tracks ()  # Calculate RG and tag file
 tag_tracks () {
     file="$1"
     _filePos="$2"
-    tracks=$(ffprobe -v error -of default=nw=1:nk=1 -select_streams a -show_entries stream=index "$file")
+    tracks=$(ffprobe\
+	-v error\
+	-of default=nw=1:nk=1\
+	-select_streams a\
+	-show_entries stream=index\
+	"$file"
+    )
 
     #{{{ track loop
     tracksProcessed=0
     for track in $tracks; do
 	#{{{ gain calculation
-        log_info "Running ffmpeg using filter ${FFMPEGFILTER}, this can take a while. (track $track on file '$file') $_filePos (REFLOUDNESS = $REFLOUDNESS LUFS)"
+        log_info "'$file': Analyzing track $track. $_filePos"
         ffmpegCmd="$FFMPEG -loglevel info -nostats -nostdin -hide_banner -i \"$file\" -map 0:$track -filter:a \""
 	ffmpegCmd="${ffmpegCmd}ebur128=peak=$PEAKTYPE:framelog=quiet\" -f null -"
-	echo "$ffmpegCmd"
-	ffmpegOut=$(eval "$ffmpegCmd" 2>&1 | tr "\n" " " | sed "s/^.*\(Parsed_ebur128.*$\)/\1/" | sed "s/ \+/ /g")
-	echo "$ffmpegOut"
-	trackGain=$(lufsTodB "$(echo "$ffmpegOut" | grep -Eo " I: $FLOAT_ERE LUFS" | cut -d\  -f3)")
-	trackPeak=$(dBtoAmplitude "$(echo "$ffmpegOut" | grep -Eo " Peak: $FLOAT_ERE dBFS" | cut -d\  -f3)")
-	trackRange=$(echo "$ffmpegOut" | grep -Eo " Loudness range: LRA: $FLOAT_ERE LU" | cut -d\  -f5)
+	# log_debug "$ffmpegCmd"
+	# ffmpegOut=$(eval "$ffmpegCmd" 2>&1 | tr "\n" " " | sed "s/^.*\(Parsed_ebur128.*$\)/\1/" | sed "s/ \+/ /g")
+	ffmpegOut=$(eval "$ffmpegCmd" 2>&1 | sed -e '0,/^\[Parsed_ebur128/d' | head -13 )
+	log_debug "$ffmpegOut"
+	trackGain=$(lufsTodB "$(getv_ebur128 "$ffmpegOut" I)")
+	trackPeak=$(dBtoAmplitude "$(getv_ebur128 "$ffmpegOut" Peak)")
+	log_debug "$trackPeak"
+	trackRange=$(getv_ebur128 "$ffmpegOut" LRA)
+	log_debug "Range: $trackRange"
         if [ "$trackGain" = "" ] || [ "$trackPeak" = "" ]; then
             log_notice "Problem finding $FFMPEGFILTER info from ffmpeg for track $track on file '$file' $_filePos."
             continue

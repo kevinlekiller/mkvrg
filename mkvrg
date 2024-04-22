@@ -319,8 +319,7 @@ tag_tracks () {
             log_error "$log_prefix: Problem finding $FFMPEGFILTER $_filePos."
             continue
         fi
-	summary="gain=$trackGain dB"
-	summary="${summary}, peak=$trackPeak ($(amplitudeToDB "$trackPeak") dB)"
+	summary="gain=$trackGain dB, peak=$trackPeak, range=$trackRange LU"
         log_info "$log_prefix: $summary $_filePos."
         if [ "$PREVIEW" = true ]; then
             log_notice "PREVIEW mode is on, not applying tags, skipping to next track/file."

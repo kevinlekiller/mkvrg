@@ -52,15 +52,15 @@ Requires: $reqProgs
 
 Options:
 
--P, --peak=[true,sample]
+-P, --peak={true|sample}
 
 		    Type of peak calculation to use.
 		    sample : Faster but less accurate. Varies from file to file, but can be up
 		    to 2x faster in testing.
 		    true : Slower but accurate.
-		    Default: true
+		    Default: 'true'
 
--R [reference LUFS] Set reference loudness.
+-R {reference}	    Set reference loudness.
 
 		    WARNING: This is strongly discouraged, since mkvrg writes REPLAYGAIN (2.0)
 		    tags, which have an implied reference loudness of -18 dBFS/LUFS. Even though
@@ -77,6 +77,9 @@ Options:
 -f, --force	    Force mkvrg to process matroska files, even if they already have
 		    replaygain tags.
 
+-l, --log-level={error|warn|notice|info|debug}
+
+		    Set log level (verbosity). Default: 'warn'
 
 Environment variables:
 
@@ -92,6 +95,7 @@ DESCRIPTION
 ##################################### ENV VARS ##########################################
 #########################################################################################
 LC_NUMERIC=C
+LOG_LVL=WARN
 VERIFY=true
 FORCE=false
 FFMPEG=${FFMPEG:-"ffmpeg"}
@@ -105,9 +109,21 @@ PREVIEW=false
 # ENV VARS }}}
 
 # {{{ Logging
+# shellcheck disable=2034
+{ 
+    LVL_INT_ERROR=0
+    LVL_INT_WARN=1
+    LVL_INT_NOTICE=2
+    LVL_INT_INFO=3
+    LVL_INT_DEBUG=4
+}
 # {{{ log_message ()
 log_message () {
     level=$1; shift;
+    eval LVL_INT=\$LVL_INT_"$level"
+    eval LOG_LVL_INT=\$LVL_INT_$LOG_LVL
+    [ "$LVL_INT" -gt "$LOG_LVL_INT" ] && return
+
     case $level in
 	ERROR)
 	    color='\e[31m'
@@ -163,7 +179,7 @@ isMatroska () { match_ere "Matroska" "$(file "$1")"; }
 #{{{ Option parsing
 __ill_v () { echo "$(basename "$0"): invalid argument '$2' for '-$1'"; usage; exit 1; } >&2
 __ill_o () { echo "$(basename "$0"): invalid option '-$1'"; usage; exit 1; }
-while getopts ":-:fhpR:V" o; do
+while getopts ":-:fhl:pR:V" o; do
     case $o in
 	-)  # Long options MUST be delimited by '=' from their values
 	    n=$(echo "$OPTARG" | cut -d= -f1)
@@ -171,6 +187,10 @@ while getopts ":-:fhpR:V" o; do
 	    case $n in
 		force)
 		    FORCE=true ;;
+		log-level)  
+		    ! match_ere '^(debug|info|notice|warn|error)$' "$v" &&
+			__ill_v "-$n" "$v"
+		    LOG_LVL=$(echo "$v" | tr '[:lower:]' '[:upper:]') ;;
 		no-verify)
 		    VERIFY=false ;;
 		peak)
@@ -183,6 +203,10 @@ while getopts ":-:fhpR:V" o; do
 	    esac
 	    ;;
 	f)  FORCE=true ;;
+	l)  
+	    ! match_ere '^(debug|info|notice|warn|error)$' "$OPTARG" &&
+		__ill_v "$o" "$OPTARG"
+	    LOG_LVL=$(echo "$OPTARG" | tr '[:lower:]' '[:upper:]') ;;
 	R)  { isnum "$OPTARG" && REFLOUDNESS=$OPTARG; } || __ill_v "$o" "$OPTARG" ;;
 	p)  PREVIEW=true ;;
 	V)  VERIFY=false ;;

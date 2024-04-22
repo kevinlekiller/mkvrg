@@ -383,7 +383,9 @@ tag_tracks () {
 	TAGS
 
 	log_debug "$log_prefix: $(printf '%s\n%s\n' "'$tmpFile':" "$(cat "$tmpFile")")"
-	log_debug "$log_prefix,mkvpropedit: $(mkvpropedit --tags track:"$((track+1))":"$tmpFile" "$file")"
+	log_debug "$log_prefix,mkvpropedit: $(
+	    mkvpropedit --tags track:"$((track+1))":"$tmpFile" "$file"
+	    )"
         if [ "$VERIFY" = true ]; then
 	    eval "$(get_rg_tags "$file" "$track")"
 	    if ! {

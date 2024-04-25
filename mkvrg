@@ -113,7 +113,7 @@ PREVIEW=false
 
 # {{{ Logging
 # shellcheck disable=2034
-{ 
+{
     LVL_INT_ERROR=0
     LVL_INT_WARN=1
     LVL_INT_NOTICE=2
@@ -197,7 +197,7 @@ while getopts ":-:fhl:pR:V" o; do
 	    case $n in
 		force)
 		    FORCE=true ;;
-		log-level)  
+		log-level)
 		    ! match_ere '^(debug|info|notice|warn|error)$' "$v" &&
 			__ill_v "-$n" "$v"
 		    LOG_LVL=$(echo "$v" | tr '[:lower:]' '[:upper:]') ;;
@@ -213,7 +213,7 @@ while getopts ":-:fhl:pR:V" o; do
 	    esac
 	    ;;
 	f)  FORCE=true ;;
-	l)  
+	l)
 	    ! match_ere '^(debug|info|notice|warn|error)$' "$OPTARG" &&
 		__ill_v "$o" "$OPTARG"
 	    LOG_LVL=$(echo "$OPTARG" | tr '[:lower:]' '[:upper:]') ;;
@@ -313,7 +313,7 @@ tag_tracks () {
 	if [ "$FORCE" != true ]; then
 	    rg_tags=$(get_rg_tags "$file" "$track")
 	    log_debug "$log_prefix: Input track tags: $rg_tags"
-	    if 
+	    if
 		match_ere "REPLAYGAIN_TRACK_GAIN" "$rg_tags" &&
 		    match_ere "REPLAYGAIN_TRACK_PEAK" "$rg_tags"
 	    then
@@ -349,7 +349,7 @@ tag_tracks () {
         fi
 	#}}} value parsing
 
-	#{{{ track tag generation
+	#{{{ tag generation
 	# DO NOT touch the indent tabs/spaces!!!
 	cat > "$tmpFile" <<-TAGS
 	<?xml version="1.0" encoding="ISO-8859-1"?>
@@ -381,11 +381,14 @@ tag_tracks () {
 	    </Tag>
 	</Tags>"
 	TAGS
-
 	log_debug "$log_prefix: $(printf '%s\n%s\n' "'$tmpFile':" "$(cat "$tmpFile")")"
+	#}}} tag generation
+
 	log_debug "$log_prefix,mkvpropedit: $(
 	    mkvpropedit --tags track:"$((track+1))":"$tmpFile" "$file"
 	    )"
+
+	#{{{ verification
         if [ "$VERIFY" = true ]; then
 	    eval "$(get_rg_tags "$file" "$track")"
 	    if ! {
@@ -401,13 +404,13 @@ tag_tracks () {
 	    fi
 	    unset \
 		REPLAYGAIN_ALGORITHM \
-	       	REPLAYGAIN_REFERENCE_LOUDNESS \
+		REPLAYGAIN_REFERENCE_LOUDNESS \
 		REPLAYGAIN_TRACK_GAIN \
 		REPLAYGAIN_TRACK_PEAK \
 		REPLAYGAIN_TRACK_RANGE
         fi
+	#}}} verification
         log_info "$log_prefix: Succesfully applied replaygain tags $_filePos."
-	#}}} track tag generation
         tracksProcessed=$((tracksProcessed+1))
     done; [ $tracksProcessed -gt 0 ] && filesProcessed=$(( filesProcessed + 1 ))
     #}}} track loop

@@ -412,7 +412,7 @@ tag_tracks () {
 	#}}} verification
         log_info "$log_prefix: Succesfully applied replaygain tags $_filePos."
         tracksProcessed=$((tracksProcessed+1))
-    done; [ $tracksProcessed -gt 0 ] && filesProcessed=$(( filesProcessed + 1 ))
+    done; [ $tracksProcessed = 0 ] || filesProcessed=$(( filesProcessed + 1 ))
     #}}} track loop
 }
 #}}} tag_tracks ()

@@ -111,6 +111,14 @@ PREVIEW=false
 #########################################################################################
 # ENV VARS }}}
 
+
+# colors (see tput(1) and terminfo(5))
+{
+    red=$(tput setaf 1 || tput setf 4)
+    green=$(tput setaf 2 || tput setf 2)
+    yellow=$(tput setaf 3 || tput setf 6)
+    orig_color=$(tput sgr0)
+}
 # {{{ Logging
 # shellcheck disable=2034
 {
@@ -123,39 +131,36 @@ PREVIEW=false
 # {{{ log_message ()
 log_message () {
     level=$1; shift;
+    text="$*"
     if match_ere '^(ERROR|WARN(ING)*|NOTICE|INFO|DEBUG)$' "$level"; then
 	eval LVL_INT=\$LVL_INT_"$level"
-	eval LOG_LVL_INT=\$LVL_INT_$LOG_LVL
+	eval LOG_LVL_INT=\$LVL_INT_"$LOG_LVL"
 	[ "$LVL_INT" -gt "$LOG_LVL_INT" ] && return
     fi
 
     case $level in
 	ERROR)
-	    color='\e[31m'
+	    color=$red
 	    ;;
 	WARN|WARNING)
-	    color='\e[93m'
+	    color=$yellow
 	    ;;
 	NOTICE)
-	    color='\e[92m'
-	    ;;
-	INFO)
-	    color='\e[0m'
-	    ;;
-	DEBUG)
-	    color='\e[0m'
+	    color=$green
 	    ;;
 	*)
-	    color='\e[0m'
 	    ;;
     esac
-    text="$*"
+
+    printf '%b' "$color"
     IFS_=$IFS
-    IFS=$(printf '\n\r')
+    IFS=$(printf '\n')
     for line in $text; do
-	printf '%b%s\e[0m\n' "$color" "$level: $line"
+	printf '%s: %s\n' "$level" "$line"
     done
     IFS=$IFS_
+    printf '%b' "$orig_color"
+    unset color
 } >&2
 # log_message () }}}
 

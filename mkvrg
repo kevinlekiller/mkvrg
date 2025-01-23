@@ -154,7 +154,7 @@ log_message () {
 
     printf '%b' "$color"
     IFS_=$IFS
-    IFS=$(printf '\n')
+    IFS=$(printf '\n\r')
     for line in $text; do
 	printf '%s: %s\n' "$level" "$line"
     done
